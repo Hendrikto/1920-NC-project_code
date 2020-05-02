@@ -8,7 +8,7 @@ from .ghosts import Ghost
 from .util import ones_at
 
 
-class Game():
+class Game:
     class State(enum.Enum):
         ACTIVE = enum.auto()
         LOST = enum.auto()
