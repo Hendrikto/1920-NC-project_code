@@ -2,6 +2,8 @@ import enum
 
 import numpy as np
 
+from .util import ones_at
+
 
 class Game():
     class State(enum.Enum):
@@ -44,6 +46,7 @@ class Game():
 
         # objects
         characters[1:-1, 1:-2][self.walls] = '█'
+        characters[1:-1, 1:-2][ones_at(self.board_size, self.food, dtype=np.bool8)] = '•'
         characters[tuple(self.pacman + 1)] = 'P'
 
         return ''.join(characters.flat)
@@ -63,8 +66,12 @@ class Game():
         )
 
     def reset(self):
+        self.food = set(zip(*(~self.walls).nonzero()))
         self.pacman = np.array((5, 5), dtype=np.int8)
         self.state = Game.State.ACTIVE
 
     def step(self, direction):
         self.move(self.pacman, direction)
+
+        if tuple(self.pacman) in self.food:
+            self.food.remove(tuple(self.pacman))
