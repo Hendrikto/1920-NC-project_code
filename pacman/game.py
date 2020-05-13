@@ -1,4 +1,5 @@
 import enum
+from itertools import chain
 
 import numpy as np
 
@@ -49,7 +50,7 @@ class Game():
         characters[1:-1, 1:-2][ones_at(self.board_size, self.food, dtype=np.bool8)] = '•'
         characters[tuple(self.pacman + 1)] = 'P'
 
-        return ''.join(characters.flat)
+        return ''.join(chain(characters.flat, f'score: {self.score}'))
 
     def move(self, position, direction):
         new_position = position + direction.value
@@ -68,6 +69,7 @@ class Game():
     def reset(self):
         self.food = set(zip(*(~self.walls).nonzero()))
         self.pacman = np.array((5, 5), dtype=np.int8)
+        self.score = 0
         self.state = Game.State.ACTIVE
 
     def step(self, direction):
@@ -75,6 +77,7 @@ class Game():
 
         if tuple(self.pacman) in self.food:
             self.food.remove(tuple(self.pacman))
+            self.score += 1
 
         if not self.food:
             self.state = Game.State.WON
