@@ -48,6 +48,11 @@ class Game():
 
         return ''.join(characters.flat)
 
+    def move(self, position, direction):
+        new_position = position + direction.value
+        if not self.position_blocked(new_position):
+            position[:] = new_position
+
     def position_blocked(self, position):
         position = np.asarray(position)
         return (
