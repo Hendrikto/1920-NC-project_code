@@ -48,6 +48,15 @@ class Game():
 
         return ''.join(characters.flat)
 
+    def position_blocked(self, position):
+        position = np.asarray(position)
+        return (
+            # out of bounds
+            any((position < 0) | (position >= self.board_size))
+            # blocked by wall
+            or self.walls[tuple(position)]
+        )
+
     def reset(self):
         self.pacman = np.array((5, 5), dtype=np.int8)
         self.state = Game.State.ACTIVE
