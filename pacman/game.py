@@ -3,6 +3,10 @@ from itertools import chain
 
 import numpy as np
 
+from .ghosts import (
+    ChasingGhost,
+    RandomGhost,
+)
 from .util import ones_at
 
 
@@ -48,6 +52,8 @@ class Game():
         # objects
         characters[1:-1, 1:-2][self.walls] = '█'
         characters[1:-1, 1:-2][ones_at(self.board_size, self.food, dtype=np.bool8)] = '•'
+        for ghost in self.ghosts:
+            characters[tuple(ghost.position + 1)] = 'G'
         characters[tuple(self.pacman + 1)] = 'P'
 
         return ''.join(chain(characters.flat, f'score: {self.score}'))
@@ -68,6 +74,10 @@ class Game():
 
     def reset(self):
         self.food = set(zip(*(~self.walls).nonzero()))
+        self.ghosts = (
+            ChasingGhost(self, (10, 10)),
+            RandomGhost(self, (0, 0)),
+        )
         self.pacman = np.array((5, 5), dtype=np.int8)
         self.score = 0
         self.state = Game.State.ACTIVE
@@ -78,6 +88,11 @@ class Game():
         if tuple(self.pacman) in self.food:
             self.food.remove(tuple(self.pacman))
             self.score += 1
+
+        for ghost in self.ghosts:
+            self.move(ghost.position, ghost.choose_direction())
+            if all(self.pacman == ghost.position):
+                self.state = Game.State.LOST
 
         if not self.food:
             self.state = Game.State.WON
