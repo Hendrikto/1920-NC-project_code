@@ -58,6 +58,18 @@ class Game():
 
         return ''.join(chain(characters.flat, f'score: {self.score}'))
 
+    @property
+    def array(self):
+        return np.stack((
+            self.walls.view(np.int8),  # coerce type
+            ones_at(self.board_size, (self.pacman,), dtype=np.int8),
+            *(
+                ones_at(self.board_size, (ghost.position,), dtype=np.int8)
+                for ghost in self.ghosts
+            ),
+            ones_at(self.board_size, self.food, dtype=np.int8),
+        ))
+
     def move(self, position, direction):
         new_position = position + direction.value
         if not self.position_blocked(new_position):
