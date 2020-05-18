@@ -9,6 +9,13 @@ class Ghost():
         self.position = np.array(position, dtype=np.int8)
 
 
+class ChasingGhost(Ghost):
+    def choose_direction(self):
+        direction = self.game.pacman - self.position
+        direction[np.abs(direction).argmin()] = 0
+        return Direction(tuple(np.sign(direction)))
+
+
 class RandomGhost(Ghost):
     def choose_direction(self):
         return np.random.choice(tuple(
