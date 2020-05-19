@@ -52,11 +52,15 @@ class Game():
         # objects
         characters[1:-1, 1:-2][self.walls] = '█'
         characters[1:-1, 1:-2][ones_at(self.board_size, self.food, dtype=np.bool8)] = '•'
+        characters[1:-1, 1:-2][ones_at(self.board_size, self.powerups, dtype=np.bool8)] = '◆'
         for ghost in self.ghosts:
             characters[tuple(ghost.position + 1)] = 'G'
         characters[tuple(self.pacman + 1)] = 'P'
 
-        return ''.join(chain(characters.flat, f'score: {self.score}'))
+        return ''.join(chain(characters.flat, ' | '.join((
+            f'score: {self.score}',
+            f'empowered: {self.empowered}',
+        ))))
 
     @property
     def array(self):
@@ -68,6 +72,7 @@ class Game():
                 for ghost in self.ghosts
             ),
             ones_at(self.board_size, self.food, dtype=np.int8),
+            ones_at(self.board_size, self.powerups, dtype=np.int8),
         ))
 
     def move(self, position, direction):
@@ -85,7 +90,9 @@ class Game():
         )
 
     def reset(self):
-        self.food = set(zip(*(~self.walls).nonzero()))
+        self.empowered = 0
+        self.powerups = {(0, 10), (10, 0)}
+        self.food = set(zip(*(~self.walls).nonzero())) - self.powerups
         self.ghosts = (
             ChasingGhost(self, (10, 10)),
             RandomGhost(self, (0, 0)),
@@ -101,10 +108,16 @@ class Game():
             self.food.remove(tuple(self.pacman))
             self.score += 1
 
+        if tuple(self.pacman) in self.powerups:
+            self.powerups.remove(tuple(self.pacman))
+            self.empowered = 12
+        elif self.empowered > 0:
+            self.empowered -= 1
+
         for ghost in self.ghosts:
             self.move(ghost.position, ghost.choose_direction())
             if all(self.pacman == ghost.position):
                 self.state = Game.State.LOST
 
-        if not self.food:
+        if not self.food and not self.powerups:
             self.state = Game.State.WON
