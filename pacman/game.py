@@ -79,6 +79,12 @@ class Game():
             ones_at(self.board_size, self.powerups, dtype=np.int8),
         ))
 
+    def consume(self, consumable):
+        position = tuple(self.pacman)
+        success = position in consumable
+        consumable.discard(position)
+        return success
+
     def move(self, position, direction):
         new_position = position + direction.value
         if not self.position_blocked(new_position):
@@ -108,12 +114,10 @@ class Game():
     def step(self, direction):
         self.move(self.pacman, direction)
 
-        if tuple(self.pacman) in self.food:
-            self.food.remove(tuple(self.pacman))
+        if self.consume(self.food):
             self.score += 1
 
-        if tuple(self.pacman) in self.powerups:
-            self.powerups.remove(tuple(self.pacman))
+        if self.consume(self.powerups):
             self.empowered = 12
         elif self.empowered > 0:
             self.empowered -= 1
