@@ -5,6 +5,7 @@ import numpy as np
 
 from .ghosts import (
     ChasingGhost,
+    Ghost,
     RandomGhost,
 )
 from .util import ones_at
@@ -54,7 +55,8 @@ class Game():
         characters[1:-1, 1:-2][ones_at(self.board_size, self.food, dtype=np.bool8)] = '•'
         characters[1:-1, 1:-2][ones_at(self.board_size, self.powerups, dtype=np.bool8)] = '◆'
         for ghost in self.ghosts:
-            characters[tuple(ghost.position + 1)] = 'G'
+            if ghost.state is Ghost.State.ALIVE:
+                characters[tuple(ghost.position + 1)] = 'G'
         characters[tuple(self.pacman + 1)] = 'P'
 
         return ''.join(chain(characters.flat, ' | '.join((
@@ -69,6 +71,8 @@ class Game():
             ones_at(self.board_size, (self.pacman,), dtype=np.int8),
             *(
                 ones_at(self.board_size, (ghost.position,), dtype=np.int8)
+                * (-self.empowered if self.empowered else 1)
+                * (0 if ghost.state is Ghost.State.DEAD else 1)
                 for ghost in self.ghosts
             ),
             ones_at(self.board_size, self.food, dtype=np.int8),
@@ -115,9 +119,15 @@ class Game():
             self.empowered -= 1
 
         for ghost in self.ghosts:
+            if ghost.state is Ghost.State.DEAD:
+                continue
+
             self.move(ghost.position, ghost.choose_direction())
             if all(self.pacman == ghost.position):
-                self.state = Game.State.LOST
+                if self.empowered:
+                    ghost.kill()
+                else:
+                    self.state = Game.State.LOST
 
         if not self.food and not self.powerups:
             self.state = Game.State.WON
