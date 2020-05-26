@@ -75,3 +75,6 @@ class Game():
 
         if tuple(self.pacman) in self.food:
             self.food.remove(tuple(self.pacman))
+
+        if not self.food:
+            self.state = Game.State.WON
