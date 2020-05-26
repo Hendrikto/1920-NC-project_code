@@ -1,7 +1,14 @@
+import enum
+
 import numpy as np
 
 
 class Game():
+    class State(enum.Enum):
+        ACTIVE = enum.auto()
+        LOST = enum.auto()
+        WON = enum.auto()
+
     def __init__(self):
         self.walls = np.array((
             (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
