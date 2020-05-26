@@ -50,3 +50,4 @@ class Game():
 
     def reset(self):
         self.pacman = np.array((5, 5), dtype=np.int8)
+        self.state = Game.State.ACTIVE
