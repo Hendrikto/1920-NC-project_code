@@ -2,6 +2,7 @@ import enum
 from itertools import chain
 
 import numpy as np
+import pandas as pd
 
 from .ghosts import (
     ChasingGhost,
@@ -16,6 +17,12 @@ class Game():
         ACTIVE = enum.auto()
         LOST = enum.auto()
         WON = enum.auto()
+
+    reward_scores = pd.Series({
+        'food': 10,
+        'powerup': 50,
+        'ghost': 200,
+    })
 
     def __init__(self):
         self.walls = np.array((
@@ -112,13 +119,16 @@ class Game():
         self.state = Game.State.ACTIVE
 
     def step(self, direction):
+        rewards = pd.Series(False, index=self.reward_scores.index, dtype=np.bool8)
+
         self.move(self.pacman, direction)
 
         if self.consume(self.food):
-            self.score += 1
+            rewards.food = True
 
         if self.consume(self.powerups):
             self.empowered = 12
+            rewards.powerup = True
         elif self.empowered > 0:
             self.empowered -= 1
 
@@ -130,8 +140,13 @@ class Game():
             if all(self.pacman == ghost.position):
                 if self.empowered:
                     ghost.kill()
+                    rewards.ghost = True
                 else:
                     self.state = Game.State.LOST
 
         if not self.food and not self.powerups:
             self.state = Game.State.WON
+
+        self.score += sum(rewards * self.reward_scores)
+
+        return rewards
