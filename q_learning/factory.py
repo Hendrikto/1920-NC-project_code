@@ -1,9 +1,23 @@
 from functools import partial
 
-from .agent import EnsembleQAgent, QAgent
-from .data import EnsembleMemory, MetaMemory, ReplayMemory
-from .nn import EnsembleLinearModel, LinearModel, MLP
-from .combine import Combiner, MLPCombiner
+from .agent import (
+    EnsembleQAgent,
+    QAgent,
+)
+from .combine import (
+    Combiner,
+    MLPCombiner,
+)
+from .data import (
+    EnsembleMemory,
+    MetaMemory,
+    ReplayMemory,
+)
+from .networks import (
+    MLP,
+    EnsembleLinearModel,
+    LinearModel,
+)
 
 
 def q_agent(env, args, device):
@@ -13,7 +27,7 @@ def q_agent(env, args, device):
         env.state_shape, env.num_actions,
         args.num_hidden, args.num_atoms,
         args.num_agents,
-        device
+        device,
     )
 
     # initialize replay memory
@@ -21,7 +35,7 @@ def q_agent(env, args, device):
         args.capacity,
         args.gamma, args.num_transitions,
         args.b, args.b_increase,
-        args.e, args.a
+        args.e, args.a,
     )
 
     # initialize agent
@@ -31,7 +45,7 @@ def q_agent(env, args, device):
         args.num_atoms, args.v_min, args.v_max,
         args.gamma, args.num_transitions,
         args.train_onset, args.num_update,
-        device
+        device,
     )
 
     return memory, agent
@@ -41,7 +55,7 @@ def ensemble_q_agent(env, args, device):
     combiner = Combiner(
         args.combine_mode,
         args.num_atoms, args.v_min, args.v_max,
-        device
+        device,
     )
 
     memory = EnsembleMemory(
@@ -49,7 +63,7 @@ def ensemble_q_agent(env, args, device):
         args.capacity,
         args.gamma, args.num_transitions,
         args.b, args.b_increase,
-        args.e, args.a
+        args.e, args.a,
     )
 
     # make function that initializes model
@@ -58,7 +72,7 @@ def ensemble_q_agent(env, args, device):
         env.state_shape, env.num_actions,
         args.num_hidden, args.num_atoms,
         args.num_agents,
-        device
+        device,
     )
 
     # initialize agent
@@ -70,7 +84,7 @@ def ensemble_q_agent(env, args, device):
         args.num_atoms, args.v_min, args.v_max,
         args.gamma, args.num_transitions,
         args.train_onset, args.num_update,
-        device
+        device,
     )
 
     return memory, agent
@@ -82,7 +96,7 @@ def q_agent_mlp_combiner(env, args, device):
         MLP,
         args.num_agents, env.num_actions,
         args.num_hidden, args.num_atoms,
-        device
+        device,
     )
 
     # initialize replay memory
@@ -91,7 +105,7 @@ def q_agent_mlp_combiner(env, args, device):
         args.capacity,
         args.gamma, args.num_transitions,
         args.b, args.b_increase,
-        args.e, args.a
+        args.e, args.a,
     )
 
     combiner = MLPCombiner(
@@ -100,7 +114,7 @@ def q_agent_mlp_combiner(env, args, device):
         args.num_atoms, args.v_min, args.v_max,
         args.gamma, args.num_transitions,
         args.train_onset, args.num_update,
-        device
+        device,
     )
 
     # make function that initializes model
@@ -109,7 +123,7 @@ def q_agent_mlp_combiner(env, args, device):
         env.state_shape, env.num_actions,
         args.num_hidden, args.num_atoms,
         args.num_agents,
-        device
+        device,
     )
 
     # initialize agent
@@ -121,7 +135,7 @@ def q_agent_mlp_combiner(env, args, device):
         args.num_atoms, args.v_min, args.v_max,
         args.gamma, args.num_transitions,
         args.train_onset, args.num_update,
-        device
+        device,
     )
 
     # set policy net to compute Q-value distributions at end of episode

@@ -1,5 +1,5 @@
-from functools import reduce
 import math
+from functools import reduce
 
 import torch
 import torch.nn as nn
@@ -68,8 +68,8 @@ class CategoricalLoss(nn.Module):
         # compute upper and lower atom indices of aligned target distribution
         b = (tau - self.v_min) / self.delta_z
         b = torch.clamp(b, min=0, max=self.num_atoms - 1)
-        l = b.floor().long()
-        u = b.ceil().long()
+        floor = b.floor().long()
+        ceil = b.ceil().long()
 
         # compute index offsets of distributions in flattened q_target
         offset = torch.arange(0, b.numel(), step=self.num_atoms)
@@ -77,9 +77,9 @@ class CategoricalLoss(nn.Module):
 
         # compute aligned target Q-value distribution
         m = torch.zeros_like(q_target)
-        m.put_(l + offset, q_target * (u - b), accumulate=True)
-        m.put_(u + offset, q_target * (b - l), accumulate=True)
-        m.put_(l + offset, q_target * (l == u), accumulate=True)
+        m.put_(floor + offset, q_target * (ceil - b), accumulate=True)
+        m.put_(ceil + offset, q_target * (b - floor), accumulate=True)
+        m.put_(floor + offset, q_target * (floor == ceil), accumulate=True)
 
         # loss as weighted N-step cross-entropy over Q-value distributions
         magnitudes = -torch.sum(m * F.log_softmax(q_pred, dim=-1), dim=-1)
@@ -161,7 +161,7 @@ class NoisyLinear(nn.Module):
         for i in range(0, self.num_in, in_features):
             col_idx = torch.cat((
                 torch.arange(0, i),
-                torch.arange(i + in_features, self.num_in)
+                torch.arange(i + in_features, self.num_in),
             ))
             col_indices.append(col_idx)
         col_indices = torch.stack(col_indices)
@@ -316,7 +316,7 @@ class EnsembleLinearModel(LinearModel):
             state_shape, num_actions,
             num_hidden, num_atoms,
             num_agents,
-            device
+            device,
         )
 
         # save number of agents
@@ -386,11 +386,11 @@ class MLP(nn.Module):
         # initialize linear layers
         self.fc1 = NoisyLinear(
             in_features=num_agents * num_actions * num_atoms,
-            out_features=num_agents * num_hidden
+            out_features=num_agents * num_hidden,
         )
         self.fc2 = NoisyLinear(
             in_features=num_agents * num_hidden,
-            out_features=num_actions * num_atoms
+            out_features=num_actions * num_atoms,
         )
 
         self.device = device

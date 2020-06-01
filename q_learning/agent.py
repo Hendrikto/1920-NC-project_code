@@ -3,52 +3,61 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.optim import Adam
 
-from .nn import CategoricalLoss
+from .networks import CategoricalLoss
 
 
 class QAgentBase:
-    """Base class which the Q agents will extend.
+    """
+    Q-agent base.
 
     Attributes:
-        policy_net  = [nn.Module] model used for action selection
-        target_net  = [nn.Module] model used for retrieving target Q-values
-        optimizer   = [Optimizer] optimizer used to train policy network
-        q_indices   = [[torch.Tensor]*2] Q-value index arrays to index faster
-        memory      = [MemoryBase] replay memory to sample state transitions
-        batch_size  = [int] batch size per training step
-        atoms       = [torch.Tensor] Q-value positions of all the atoms
-        criterion   = [nn.Module] loss module as weighted cross-entropy
+        policy_net = [nn.Module] model used for action selection
+        target_net = [nn.Module] model used for retrieving target Q-values
+        optimizer = [Optimizer] optimizer used to train policy network
+        q_indices = [[torch.Tensor]*2] Q-value index arrays to index faster
+        memory = [MemoryBase] replay memory to sample state transitions
+        batch_size = [int] batch size per training step
+        atoms = [torch.Tensor] Q-value positions of all the atoms
+        criterion = [nn.Module] loss module as weighted cross-entropy
         train_onset = [int] number of replay memories before training starts
-        num_update  = [int] period to update the target network
-        num_steps   = [int] number of times policy network has been updated
+        num_update = [int] period to update the target network
+        num_steps = [int] number of times policy network has been updated
     """
 
-    def __init__(self,
-                 model_fn, lr,
-                 memory, batch_size,
-                 num_atoms, v_min, v_max,
-                 gamma, n,
-                 train_onset, num_update,
-                 device):
-        """Initialize the Q agent base.
+    def __init__(
+        self,
+        model_factory,
+        lr,
+        memory,
+        batch_size,
+        num_atoms,
+        v_min, v_max,
+        gamma,
+        n,
+        train_onset,
+        num_update,
+        device,
+    ):
+        """
+        Initialize base Q-agent.
 
         Args:
-            model_fn    = [fn] function that initializes model
-            lr          = [float] learning rate of Adam optimizer
-            memory      = [MemoryBase] replay memory to sample state transitions
-            batch_size  = [int] batch size per training step
-            num_atoms   = [int] number of atoms in each Q-value distribution
-            v_min       = [float] Q-value position of first atom
-            v_max       = [float] Q-value position of last atom
-            gamma       = [float] discount factor for future rewards
-            n           = [int] number of transitions used for N-step DQN
+            model_factory = [fn] function that initializes model
+            lr = [float] learning rate of Adam optimizer
+            memory = [MemoryBase] replay memory to sample state transitions
+            batch_size = [int] batch size per training step
+            num_atoms = [int] number of atoms in each Q-value distribution
+            v_min = [float] Q-value position of first atom
+            v_max = [float] Q-value position of last atom
+            gamma = [float] discount factor for future rewards
+            n = [int] number of transitions used for N-step DQN
             train_onset = [int] number of replay memories before training starts
-            num_update  = [int] period to update the target network
-            device      = [torch.device] device to put the models and data on
+            num_update = [int] period to update the target network
+            device = [torch.device] device to put the models and data on
         """
         # setup the policy and target neural networks
-        self.policy_net = model_fn()
-        self.target_net = model_fn()
+        self.policy_net = model_factory()
+        self.target_net = model_factory()
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.target_net.eval()
 
@@ -72,16 +81,17 @@ class QAgentBase:
         self.num_update = num_update
         self.num_steps = 0
 
-    def _q_distrs(self, actions, old_states, new_states):
-        """Compute predicted and target Q-value distributions with double DQN.
+    def _q_distributions(self, actions, old_states, new_states):
+        """
+        Compute predicted and target Q-value distributions with double DQN.
 
         Args [[torch.Tensor]*3]:
-            actions    = actions in old_states of shape (batch_size, agents)
+            actions = actions in old_states of shape (batch_size, agents)
             old_states = oldest states of shape (batch_size, agents, *)
             new_states = newest states of shape (batch_size, agents, *)
 
         Returns [[torch.Tensor]*2]:
-            q_pred   = predicted Q-value distributions on oldest states
+            q_pred = predicted Q-value distributions on oldest states
                 This output has shape (batch_size, agents, atoms). The actions
                 are selected with the parameter actions.
             q_target = target Q-value distributions on newest states
@@ -104,7 +114,8 @@ class QAgentBase:
         return q_pred, q_target
 
     def _update_networks(self, loss):
-        """Update the policy and target networks.
+        """
+        Update policy and target networks.
 
         The policy network is updated according to the provided loss and the
         target network is given the same weights as the policy network every
@@ -125,7 +136,7 @@ class QAgentBase:
             self.target_net.load_state_dict(self.policy_net.state_dict())
 
     def train(self):
-        """Trains agent on previous transitions."""
+        """Train on previous transitions."""
         # start training after train_onset memories have been accumulated
         if len(self.memory) < self.train_onset:
             return
@@ -135,7 +146,7 @@ class QAgentBase:
         ends, actions, old_states, returns, new_states, is_weights = batch
 
         # get predicted and target Q-value distributions from networks
-        q_pred, q_target = self._q_distrs(actions, old_states, new_states)
+        q_pred, q_target = self._q_distributions(actions, old_states, new_states)
 
         # compute loss as weighted cross-entropy between Q-value distributions
         feedback = self.criterion(q_pred, q_target, ends, returns, is_weights)
@@ -149,59 +160,73 @@ class QAgentBase:
 
 
 class QAgent(QAgentBase):
-    """Implements a Q agent.
+    """
+    Simple Q-agent.
 
     Attributes:
-        policy_net  = [nn.Module] model used for action selection
-        target_net  = [nn.Module] model used for retrieving target Q-values
-        optimizer   = [Optimizer] optimizer used to train policy network
-        q_indices   = [[torch.Tensor]*2] Q-value index arrays to index faster
-        memory      = [MemoryBase] replay memory to sample state transitions
-        batch_size  = [int] batch size per training step
-        atoms       = [torch.Tensor] Q-value positions of all the atoms
-        criterion   = [nn.Module] loss module as weighted cross-entropy
+        policy_net = [nn.Module] model used for action selection
+        target_net = [nn.Module] model used for retrieving target Q-values
+        optimizer = [Optimizer] optimizer used to train policy network
+        q_indices = [[torch.Tensor]*2] Q-value index arrays to index faster
+        memory = [MemoryBase] replay memory to sample state transitions
+        batch_size = [int] batch size per training step
+        atoms = [torch.Tensor] Q-value positions of all the atoms
+        criterion = [nn.Module] loss module as weighted cross-entropy
         train_onset = [int] number of replay memories before training starts
-        num_update  = [int] period to update the target network
-        num_steps   = [int] number of times policy network has been updated
+        num_update = [int] period to update the target network
+        num_steps = [int] number of times policy network has been updated
     """
 
-    def __init__(self,
-                 model_fn, lr,
-                 memory, batch_size,
-                 num_atoms, v_min, v_max,
-                 gamma, n,
-                 train_onset, num_update,
-                 device):
-        """Initialize the Q agent.
+    def __init__(
+        self,
+        model_factory,
+        lr,
+        memory,
+        batch_size,
+        num_atoms,
+        v_min, v_max,
+        gamma,
+        n,
+        train_onset,
+        num_update,
+        device,
+    ):
+        """Initialize the Q-agent.
 
         Args:
-            model_fn    = [fn] sizes of dimensions of an environment state
-            lr          = [float] learning rate of Adam optimizer
-            memory      = [MemoryBase] replay memory to sample state transitions
-            batch_size  = [int] batch size per training step
-            num_atoms   = [int] number of atoms in each Q-value distribution
-            v_min       = [float] Q-value position of first atom
-            v_max       = [float] Q-value position of last atom
-            gamma       = [float] discount factor for future rewards
-            n           = [int] number of transitions used for N-step DQN
+            model_factory = [fn] sizes of dimensions of an environment state
+            lr = [float] learning rate of Adam optimizer
+            memory = [MemoryBase] replay memory to sample state transitions
+            batch_size = [int] batch size per training step
+            num_atoms = [int] number of atoms in each Q-value distribution
+            v_min = [float] Q-value position of first atom
+            v_max = [float] Q-value position of last atom
+            gamma = [float] discount factor for future rewards
+            n = [int] number of transitions used for N-step DQN
             train_onset = [int] number of replay memories before training starts
-            num_update  = [int] period to update the target network
-            device      = [torch.device] device to put the models and data on
+            num_update = [int] period to update the target network
+            device = [torch.device] device to put the models and data on
         """
         super(QAgent, self).__init__(
-            model_fn, lr,
-            memory, batch_size,
-            num_atoms, v_min, v_max,
-            gamma, n,
-            train_onset, num_update,
-            device
+            model_factory,
+            lr,
+            memory,
+            batch_size,
+            num_atoms,
+            v_min, v_max,
+            gamma,
+            n,
+            train_onset,
+            num_update,
+            device,
         )
 
         # set Q-value index arrays beforehand for faster indexing
         self.q_indices = (torch.arange(self.batch_size),)
 
     def step(self, state):
-        """Agent selects action given the current state and its policy network.
+        """
+        Select an action for the current state, using the policy network.
 
         Args:
             state = [list] current state of the environment
@@ -224,70 +249,85 @@ class QAgent(QAgentBase):
 
 
 class EnsembleQAgent(QAgentBase):
-    """Implements an ensemble of Q agents.
+    """
+    Ensemble of Q-agents.
 
     Attributes:
-        policy_net  = [nn.Module] model used for action selection
-        target_net  = [nn.Module] model used for retrieving target Q-values
-        optimizer   = [Optimizer] optimizer used to train policy network
-        q_indices   = [[torch.Tensor]*2] Q-value index arrays to index faster
-        memory      = [MemoryBase] replay memory to sample state transitions
-        batch_size  = [int] batch size per training step
-        atoms       = [torch.Tensor] Q-value positions of all the atoms
-        criterion   = [nn.Module] loss module as weighted cross-entropy
+        policy_net = [nn.Module] model used for action selection
+        target_net = [nn.Module] model used for retrieving target Q-values
+        optimizer = [Optimizer] optimizer used to train policy network
+        q_indices = [[torch.Tensor]*2] Q-value index arrays to index faster
+        memory = [MemoryBase] replay memory to sample state transitions
+        batch_size = [int] batch size per training step
+        atoms = [torch.Tensor] Q-value positions of all the atoms
+        criterion = [nn.Module] loss module as weighted cross-entropy
         train_onset = [int] number of replay memories before training starts
-        num_update  = [int] period to update the target network
-        num_steps   = [int] number of times policy network has been updated
-        combiner    = [Combiner|MLPCombiner] combines Q-value distributions
+        num_update = [int] period to update the target network
+        num_steps = [int] number of times policy network has been updated
+        combiner = [Combiner|MLPCombiner] combines Q-value distributions
     """
 
-    def __init__(self,
-                 num_agents,
-                 model_fn, lr,
-                 memory, batch_size,
-                 combiner,
-                 num_atoms, v_min, v_max,
-                 gamma, n,
-                 train_onset, num_update,
-                 device):
-        """Initialize the ensemble of Q agents.
+    def __init__(
+        self,
+        num_agents,
+        model_factory,
+        lr,
+        memory,
+        batch_size,
+        combiner,
+        num_atoms,
+        v_min, v_max,
+        gamma,
+        n,
+        train_onset,
+        num_update,
+        device,
+    ):
+        """
+        Initialize the ensemble of Q-agents.
 
         Args:
-            num_agents  = [int] number of ensemble members
-            model_fn    = [fn] sizes of dimensions of an environment state
-            lr          = [float] learning rate of Adam optimizer
-            memory      = [MemoryBase] replay memory to sample state transitions
-            batch_size  = [int] batch size per training step
-            combiner    = [Combiner|MLPCombiner] combines Q-value distributions
-            num_atoms   = [int] number of atoms in each Q-value distribution
-            v_min       = [float] Q-value position of first atom
-            v_max       = [float] Q-value position of last atom
-            gamma       = [float] discount factor for future rewards
-            n           = [int] number of transitions used for N-step DQN
+            num_agents = [int] number of ensemble members
+            model_factory = [fn] sizes of dimensions of an environment state
+            lr = [float] learning rate of Adam optimizer
+            memory = [MemoryBase] replay memory to sample state transitions
+            batch_size = [int] batch size per training step
+            combiner = [Combiner|MLPCombiner] combines Q-value distributions
+            num_atoms = [int] number of atoms in each Q-value distribution
+            v_min = [float] Q-value position of first atom
+            v_max = [float] Q-value position of last atom
+            gamma = [float] discount factor for future rewards
+            n = [int] number of transitions used for N-step DQN
             train_onset = [int] number of replay memories before training starts
-            num_update  = [int] period to update the target network
-            device      = [torch.device] device to put the models and data on
+            num_update = [int] period to update the target network
+            device = [torch.device] device to put the models and data on
         """
         super(EnsembleQAgent, self).__init__(
-            model_fn, lr,
-            memory, batch_size,
-            num_atoms, v_min, v_max,
-            gamma, n,
-            train_onset, num_update,
-            device
+            model_factory,
+            lr,
+            memory,
+            batch_size,
+            num_atoms,
+            v_min, v_max,
+            gamma,
+            n,
+            train_onset,
+            num_update,
+            device,
         )
 
         # set Q-value index arrays beforehand for faster indexing
         self.q_indices = (
             torch.arange(self.batch_size).view(-1, 1),  # batch indices
-            torch.arange(num_agents)  # agent indices
+            torch.arange(num_agents),  # agent indices
         )
 
         # set combiner attribute
         self.combiner = combiner
 
     def step(self, state):
-        """Agent selects action given the current state and its policy network.
+        """
+        Select an action for the current state, using the policy network.
 
         The Q-value distributions are combined with self.combiner to one
         Q-value per action. The selected action is the argmax of these values.
@@ -301,10 +341,10 @@ class EnsembleQAgent(QAgentBase):
         # apply Q-learning neural network to get Q-value distributions
         with torch.no_grad():
             state = torch.tensor(state)
-            q_distr = F.softmax(self.policy_net(state), dim=-1)
+            q_distribution = F.softmax(self.policy_net(state), dim=-1)
 
         # combine Q-value distributions to one Q-value for each action
-        q_values = self.combiner.step(q_distr)
+        q_values = self.combiner.step(q_distribution)
 
         # choose an action by greedily picking from Q table
         action = q_values.argmax()

@@ -4,34 +4,36 @@ import torch.nn.functional as F
 
 
 class MemoryBase:
-    """Base class which replay memories will extend.
+    """
+    Replay memory base.
 
     Attributes:
-        capacity    = [int] maximum number of replay memories
-        memories    = [list] replay memories stored in a list
-        position    = [int] index in memories list for a new replay memory
-        counter     = [int] counter to store the number of pushed memories
-        n           = [int] number of transitions used for N-step DQN
+        capacity = [int] maximum number of replay memories
+        memories = [list] replay memories stored in a list
+        position = [int] index in memories list for a new replay memory
+        counter = [int] counter to store the number of pushed memories
+        n = [int] number of transitions used for N-step DQN
         transitions = [list] list of at most n transitions for N-step DQN
-        discounts   = [np.ndarray] discount factors of future rewards
-        priorities  = [torch.Tensor] priorities for PER
-        indices     = [torch.Tensor] indices of last sampled replay memories
-        b           = [float] exponent of importance sampling weights
-        b_increase  = [float] increase to b after each episode
-        e           = [float] small number to prevent zero priority
-        a           = [float] exponent of priorities
+        discounts = [np.ndarray] discount factors of future rewards
+        priorities = [torch.Tensor] priorities for PER
+        indices = [torch.Tensor] indices of last sampled replay memories
+        b = [float] exponent of importance sampling weights
+        b_increase = [float] increase to b after each episode
+        e = [float] small number to prevent zero priority
+        a = [float] exponent of priorities
     """
 
     def __init__(self, capacity, n, b, b_increase, e, a):
-        """Initializes the Replay Memory base.
+        """
+        Initialize replay memory.
 
         Args:
-            capacity   = [int] maximum number of replay memories
-            n          = [int] number of transitions used for N-step DQN
-            b          = [float] importance sampling weighting exponent
+            capacity = [int] maximum number of replay memories
+            n = [int] number of transitions used for N-step DQN
+            b = [float] importance sampling weighting exponent
             b_increase = [float] increase to b after each episode
-            e          = [float] small number to prevent zero priority
-            a          = [float] controls randomness of sampling in range [0, 1]
+            e = [float] small number to prevent zero priority
+            a = [float] controls randomness of sampling in range [0, 1]
         """
         # set parameters for DQN
         self.capacity = capacity
@@ -53,7 +55,8 @@ class MemoryBase:
         self.a = a
 
     def reset(self, state):
-        """Resets replay memory at start of each episode.
+        """
+        Reset replay memory.
 
         Args:
             state = [list] first state of the environment
@@ -63,7 +66,8 @@ class MemoryBase:
         self.b = min(self.b + self.b_increase, 1)
 
     def push(self, end, action, rewards, state):
-        """Stores new transition(s) in replay buffer.
+        """
+        Store new transition(s) in replay buffer.
 
         Aggregates state transitions until self.n transitions have been
         aggregated in the self.transitions list. Then it adds a transition
@@ -76,10 +80,10 @@ class MemoryBase:
         it only adds the [5, 6, 7, 8] list.
 
         Args:
-            end     = [bool] whether the episode has finished
-            action  = [int] performed action in range [0, num_actions)
+            end = [bool] whether the episode has finished
+            action = [int] performed action in range [0, num_actions)
             rewards = [float|np.ndarray] reward(s) after performing action
-            state   = [list] current state of the environment
+            state = [list] current state of the environment
         """
         if len(self.transitions) < (self.n - 1) * 4:
             # add new transition to self.transitions
@@ -96,7 +100,8 @@ class MemoryBase:
                 self.transitions[:4] = []
 
     def _add_memory(self):
-        """Adds current transition list to replay memories.
+        """
+        Add current transition list to replay memories.
 
         Only the necessary data needed for Q-learning is stored. These are:
         - whether the episode has finished;
@@ -113,7 +118,7 @@ class MemoryBase:
             self.transitions[2],
             self.transitions[0],
             np.sum(self.discounts * self.transitions[3::4], axis=0),
-            self.transitions[-1]
+            self.transitions[-1],
         ]
 
         # set priority of new memory to currently maximum priority
@@ -125,61 +130,64 @@ class MemoryBase:
         self.counter += 1
 
     def __len__(self):
-        """Returns current number of replay memories."""
+        """Return current number of replay memories."""
         return min(self.counter, self.capacity)
 
 
 class ReplayMemory(MemoryBase):
-    """Implements prioritized N-step experience replay.
+    """
+    Prioritized N-step experience replay.
 
     Attributes:
-        capacity    = [int] maximum number of replay memories
-        memories    = [list] replay memories stored in a list
-        position    = [int] index in memories list for a new replay memory
-        counter     = [int] counter to store the number of pushed memories
-        n           = [int] number of transitions used for N-step DQN
+        capacity = [int] maximum number of replay memories
+        memories = [list] replay memories stored in a list
+        position = [int] index in memories list for a new replay memory
+        counter = [int] counter to store the number of pushed memories
+        n = [int] number of transitions used for N-step DQN
         transitions = [list] list of at most n transitions for N-step DQN
-        discounts   = [np.ndarray] discount factors of future rewards
-        priorities  = [torch.Tensor] priorities for PER
-        indices     = [torch.Tensor] indices of last sampled replay memories
-        b           = [float] exponent of importance sampling weights
-        b_increase  = [float] increase to b after each episode
-        e           = [float] small number to prevent zero priority
-        a           = [float] exponent of priorities
+        discounts = [np.ndarray] discount factors of future rewards
+        priorities = [torch.Tensor] priorities for PER
+        indices = [torch.Tensor] indices of last sampled replay memories
+        b = [float] exponent of importance sampling weights
+        b_increase = [float] increase to b after each episode
+        e = [float] small number to prevent zero priority
+        a = [float] exponent of priorities
     """
 
     def __init__(self, capacity, gamma, n, b, b_increase, e, a):
-        """Initializes memory with a given capacity.
+        """
+        Initialize memory with a given capacity.
 
         Args:
-            capacity   = [int] maximum number of replay memories
-            gamma      = [float] discounting factor for future rewards
-            n          = [int] number of transitions used for N-step DQN
-            b          = [float] exponent of importance sampling weights
+            capacity = [int] maximum number of replay memories
+            gamma = [float] discounting factor for future rewards
+            n = [int] number of transitions used for N-step DQN
+            b = [float] exponent of importance sampling weights
             b_increase = [float] increase to b after each episode
-            e          = [float] small number to prevent zero priority
-            a          = [float] exponent of priorities
+            e = [float] small number to prevent zero priority
+            a = [float] exponent of priorities
         """
         super(ReplayMemory, self).__init__(capacity, n, b, b_increase, e, a)
 
         # set parameter for N-step DQN
-        self.discounts = gamma**np.arange(n, dtype=np.float32)
+        self.discounts = gamma ** np.arange(n, dtype=np.float32)
 
         # set parameter for prioritized experience replay
         self.priorities = torch.zeros(self.capacity)
         self.priorities[0] = 1
 
     def sample(self, batch_size):
-        """Take a prioritized sample of the available replay memories.
+        """
+        Take a prioritized sample of the available replay memories.
 
         Args:
             batch_size = [int] number of replay memories to be sampled
 
         Returns [[torch.Tensor]*6]:
-            ends       = whether the episode has ended of shape (batch_size,)
-            actions    = action performed in old state of shape (batch_size,)
+            ends = whether the episode has ended of shape (batch_size,)
+            actions = action performed in old state of shape (batch_size,)
             old_states = oldest state of transitions of shape (batch_size, *)
-            returns    = discounted return of shape (batch_size,)
+            returns = discounted return of shape (batch_size,)
             new_states = newest state of transitions of shape (batch_size, *)
             is_weights = importance sampling weight of shape (batch_size,)
         """
@@ -212,20 +220,20 @@ class EnsembleMemory(MemoryBase):
     """Implements prioritized N-step experience replay for Ensemble Q-Learning.
 
     Attributes:
-        capacity    = [int] maximum number of replay memories
-        memories    = [list] replay memories stored in a list
-        position    = [int] index in memories list for a new replay memory
-        counter     = [int] counter to store the number of pushed memories
-        agent_idx   = [torch.Tensor] pre-computed index array to index faster
-        n           = [int] number of transitions used for N-step DQN
+        capacity = [int] maximum number of replay memories
+        memories = [list] replay memories stored in a list
+        position = [int] index in memories list for a new replay memory
+        counter = [int] counter to store the number of pushed memories
+        agent_idx = [torch.Tensor] pre-computed index array to index faster
+        n = [int] number of transitions used for N-step DQN
         transitions = [list] list of at most n transitions for N-step DQN
-        discounts   = [np.ndarray] discount factors of future rewards
-        priorities  = [torch.Tensor] priorities for PER
-        indices     = [torch.Tensor] indices of last sampled replay memories
-        b           = [float] exponent of importance sampling weights
-        b_increase  = [float] increase to b after each episode
-        e           = [float] small number to prevent zero priority
-        a           = [float] exponent of priorities
+        discounts = [np.ndarray] discount factors of future rewards
+        priorities = [torch.Tensor] priorities for PER
+        indices = [torch.Tensor] indices of last sampled replay memories
+        b = [float] exponent of importance sampling weights
+        b_increase = [float] increase to b after each episode
+        e = [float] small number to prevent zero priority
+        a = [float] exponent of priorities
     """
 
     def __init__(self, num_agents, capacity, gamma, n, b, b_increase, e, a):
@@ -233,13 +241,13 @@ class EnsembleMemory(MemoryBase):
 
         Args:
             num_agents = [int] number of Q-learning agents in the ensemble
-            capacity   = [int] maximum number of replay memories
-            gamma      = [float] discounting factor for future rewards
-            n          = [int] number of transitions used for N-step DQN
-            b          = [float] exponent of importance sampling weights
+            capacity = [int] maximum number of replay memories
+            gamma = [float] discounting factor for future rewards
+            n = [int] number of transitions used for N-step DQN
+            b = [float] exponent of importance sampling weights
             b_increase = [float] increase to b after each episode
-            e          = [float] small number to prevent zero priority
-            a          = [float] exponent of priorities
+            e = [float] small number to prevent zero priority
+            a = [float] exponent of priorities
         """
         super(EnsembleMemory, self).__init__(capacity, n, b, b_increase, e, a)
 
@@ -260,10 +268,10 @@ class EnsembleMemory(MemoryBase):
             batch_size = [int] number of replay memories to be sampled
 
         Returns [[torch.Tensor]*6]:
-            ends       = whether episode ended of shape (batch_size, agents)
-            actions    = action done in old state of shape (batch_size, agents)
+            ends = whether episode ended of shape (batch_size, agents)
+            actions = action done in old state of shape (batch_size, agents)
             old_states = oldest state of shape (batch_size, agents, *)
-            returns    = discounted return of shape (batch_size, agents)
+            returns = discounted return of shape (batch_size, agents)
             new_states = newest state of shape (batch_size, agents, *)
             is_weights = importance sampling w of shape (batch_size, agents)
         """
@@ -302,10 +310,10 @@ class MetaMemory:
     Attributes:
         ensemble_memory = [EnsembleMemory] replay memory for Ensemble Q-Learning
         combiner_memory = [ReplayMemory] replay memory for MLP combiner function
-        policy_net      = [nn.Module] model to get last q_distr of episode
-        end             = [bool] whether the episode has finished
-        action          = [int] performed action in range [0, num_actions)
-        reward          = [float] mean of rewards received after doing action
+        policy_net = [nn.Module] model to get last q_distr of episode
+        end = [bool] whether the episode has finished
+        action = [int] performed action in range [0, num_actions)
+        reward = [float] mean of rewards received after doing action
     """
 
     def __init__(self, num_agents, capacity, gamma, n, b, b_increase, e, a):
@@ -313,13 +321,13 @@ class MetaMemory:
 
         Args:
             num_agents = [int] number of Q-learning agents in the ensemble
-            capacity   = [int] maximum number of replay memories
-            gamma      = [float] discounting factor for future rewards
-            n          = [int] number of transitions used for N-step DQN
-            b          = [float] exponent of importance sampling weights
+            capacity = [int] maximum number of replay memories
+            gamma = [float] discounting factor for future rewards
+            n = [int] number of transitions used for N-step DQN
+            b = [float] exponent of importance sampling weights
             b_increase = [float] increase to b after each episode
-            e          = [float] small number to prevent zero priority
-            a          = [float] exponent of priorities
+            e = [float] small number to prevent zero priority
+            a = [float] exponent of priorities
         """
         # initialize replay memories
         self.ensemble_memory = EnsembleMemory(
@@ -327,13 +335,13 @@ class MetaMemory:
             capacity,
             gamma, n,
             b, b_increase,
-            e, a
+            e, a,
         )
         self.combiner_memory = ReplayMemory(
             capacity,
             gamma, n,
             b, b_increase,
-            e, a
+            e, a,
         )
 
         # set parameters for replay memory for MLP combiner function
@@ -383,10 +391,10 @@ class MetaMemory:
         MLP combiner function.
 
         Args:
-            end     = [bool] whether the episode has finished
-            action  = [int] performed action in range [0, num_actions)
+            end = [bool] whether the episode has finished
+            action = [int] performed action in range [0, num_actions)
             rewards = [np.ndarray] rewards after performing action
-            state   = [np.ndarray] current state of the environment
+            state = [np.ndarray] current state of the environment
         """
         self.ensemble_memory.push(end, action, rewards, state)
 
