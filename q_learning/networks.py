@@ -88,6 +88,85 @@ class CategoricalLoss(nn.Module):
         return magnitudes, loss
 
 
+def _weight_indices(self, in_features, out_features):
+    """Computes index arrays of inter-agent weights of a linear layer.
+
+    Args:
+        self         = [nn.Module] network module to compute index arrays for
+        in_features  = [int] number of input units per agent
+        out_features = [int] number of output units per agent
+
+    Returns [[torch.Tensor]*2]:
+        Row and column inter-agent weight index arrays of shapes
+        (num_out, 1) and (num_out, num_in * (agents - 1) / agents).
+    """
+    row_indices = torch.arange(self.num_out).view(-1, 1)
+
+    col_indices = []
+    for i in range(0, self.num_in, in_features):
+        col_idx = torch.cat((
+            torch.arange(0, i),
+            torch.arange(i + in_features, self.num_in),
+        ))
+        col_indices.append(col_idx)
+    col_indices = torch.stack(col_indices)
+    col_indices = col_indices.repeat_interleave(out_features, dim=0)
+
+    return row_indices, col_indices
+
+
+class Linear(nn.Module):
+    """Implements a standard linear layer.
+
+    Attributes:
+        num_in     = [int] total number of input units
+        num_out    = [int] total number of output units
+        weight_idx = [[torch.Tensor]*2] weight indices to set inter-agent
+            weights to zero to ensure independence between each agent's network
+        linear     = [nn.Linear] linear layer module
+    """
+
+    def __init__(self, in_features, out_features, num_agents=1):
+        """Initializes linear layer.
+
+        Args:
+            in_features  = [int] number of input units per agent
+            out_features = [int] number of output units per agent
+            num_agents   = [int] number of independent sub-layers
+        """
+        super(Linear, self).__init__()
+
+        self.num_in = in_features * num_agents
+        self.num_out = out_features * num_agents
+        self.weight_idx = _weight_indices(self, in_features, out_features)
+
+        self.linear = nn.Linear(self.num_in, self.num_out)
+        if num_agents > 1:
+            self.linear.weight.register_hook(self._hook)
+            with torch.no_grad():
+                self.linear.weight[self.weight_idx] = 0
+
+    def _hook(self, grad):
+        """Backward hook to set inter-agent weight gradients to zero."""
+        grad = grad.clone()
+        grad[self.weight_idx] = 0
+
+        return grad
+
+    def forward(self, x):
+        """Forward pass of linear layer.
+
+        Args:
+            x = [torch.Tensor] input of shape (*, self.num_in)
+
+        Returns [torch.Tensor]:
+            Output of shape (*, self.num_out).
+        """
+        y = self.linear(x)
+
+        return y
+
+
 class NoisyLinear(nn.Module):
     """Implements a noisy linear layer with factorized Gaussian noise.
 
@@ -125,7 +204,7 @@ class NoisyLinear(nn.Module):
         self.reset_parameters(in_features)
 
         # set inter-agent weights to zero
-        self.weight_idx = self._weight_indices(in_features, out_features)
+        self.weight_idx = _weight_indices(self, in_features, out_features)
         with torch.no_grad():
             self.weight_mu[self.weight_idx] = 0
             self.weight_sigma[self.weight_idx] = 0
@@ -143,31 +222,6 @@ class NoisyLinear(nn.Module):
         val = 0.5 / math.sqrt(in_features)
         nn.init.constant_(self.weight_sigma, val)
         nn.init.constant_(self.bias_sigma, val)
-
-    def _weight_indices(self, in_features, out_features):
-        """Computes index arrays of inter-agent weights of a linear layer.
-
-        Args:
-            in_features  = [int] number of input units per agent
-            out_features = [int] number of output units per agent
-
-        Returns [[torch.Tensor]*2]:
-            Row and column inter-agent weight index arrays of shapes
-            (num_out, 1) and (num_out, num_in * (agents - 1) / agents).
-        """
-        row_indices = torch.arange(self.num_out).view(-1, 1)
-
-        col_indices = []
-        for i in range(0, self.num_in, in_features):
-            col_idx = torch.cat((
-                torch.arange(0, i),
-                torch.arange(i + in_features, self.num_in),
-            ))
-            col_indices.append(col_idx)
-        col_indices = torch.stack(col_indices)
-        col_indices = col_indices.repeat_interleave(out_features, dim=0)
-
-        return row_indices, col_indices
 
     def _hook(self, grad):
         """Backward hook to set inter-agent weight gradients to zero."""
@@ -200,11 +254,11 @@ class LinearModel(nn.Module):
     """Implements network as sequence of noisy linear layers.
 
     Attributes:
-        fc1        = [NoisyLinear] first linear layer
-        fc2a       = [NoisyLinear] second linear layer of advantage pathway
-        fc2v       = [NoisyLinear] second linear layer of state value pathway
-        fc3a       = [NoisyLinear] third linear layer of advantage pathway
-        fc3v       = [NoisyLinear] last linear layer of state value pathway
+        fc1        = [Linear] first linear layer
+        fc2a       = [Linear] second linear layer of advantage pathway
+        fc2v       = [Linear] second linear layer of state value pathway
+        fc3a       = [Linear] third linear layer of advantage pathway
+        fc3v       = [Linear] last linear layer of state value pathway
         state_ndim = [int] number of dimensions in an environment state
         num_atoms  = [int] number of atoms in each Q-value distribution
         device     = [torch.device] device to put the model and data on
@@ -229,13 +283,13 @@ class LinearModel(nn.Module):
 
         # initialize noisy linear layers
         in_features = reduce(lambda x, y: x * y, state_shape)
-        self.fc1 = NoisyLinear(in_features, num_hidden, num_agents)
+        self.fc1 = Linear(in_features, num_hidden, num_agents)
 
-        self.fc2a = NoisyLinear(num_hidden, num_hidden, num_agents)
-        self.fc2v = NoisyLinear(num_hidden, num_hidden, num_agents)
+        self.fc2a = Linear(num_hidden, num_hidden, num_agents)
+        self.fc2v = Linear(num_hidden, num_hidden, num_agents)
 
-        self.fc3a = NoisyLinear(num_hidden, num_actions * num_atoms, num_agents)
-        self.fc3v = NoisyLinear(num_hidden, num_atoms, num_agents)
+        self.fc3a = Linear(num_hidden, num_actions * num_atoms, num_agents)
+        self.fc3v = Linear(num_hidden, num_atoms, num_agents)
 
         # save number of state dimensions and number of atoms
         self.state_ndim = len(state_shape)
@@ -286,11 +340,11 @@ class EnsembleLinearModel(LinearModel):
     """Implements network as sequence of noisy linear layers.
 
     Attributes:
-        fc1        = [NoisyLinear] first linear layer
-        fc2a       = [NoisyLinear] second linear layer of advantage pathway
-        fc2v       = [NoisyLinear] second linear layer of state value pathway
-        fc3a       = [NoisyLinear] third linear layer of advantage pathway
-        fc3v       = [NoisyLinear] last linear layer of state value pathway
+        fc1        = [Linear] first linear layer
+        fc2a       = [Linear] second linear layer of advantage pathway
+        fc2v       = [Linear] second linear layer of state value pathway
+        fc3a       = [Linear] third linear layer of advantage pathway
+        fc3v       = [Linear] last linear layer of state value pathway
         state_ndim = [int] number of dimensions in an environment state
         num_atoms  = [int] number of atoms in each Q-value distribution
         num_agents = [int] number of independent sub-models
@@ -384,11 +438,11 @@ class MLP(nn.Module):
         super(MLP, self).__init__()
 
         # initialize linear layers
-        self.fc1 = NoisyLinear(
+        self.fc1 = Linear(
             in_features=num_agents * num_actions * num_atoms,
             out_features=num_agents * num_hidden,
         )
-        self.fc2 = NoisyLinear(
+        self.fc2 = Linear(
             in_features=num_agents * num_hidden,
             out_features=num_actions * num_atoms,
         )
