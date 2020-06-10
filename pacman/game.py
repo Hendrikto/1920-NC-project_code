@@ -4,11 +4,7 @@ from itertools import chain
 import numpy as np
 import pandas as pd
 
-from .ghosts import (
-    ChasingGhost,
-    Ghost,
-    RandomGhost,
-)
+from .ghosts import Ghost
 from .util import ones_at
 
 
@@ -24,21 +20,11 @@ class Game():
         'ghost': 200,
     })
 
-    def __init__(self):
-        self.walls = np.array((
-            (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
-            (0, 1, 1, 0, 1, 1, 1, 0, 1, 1, 0),
-            (0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0),
-            (0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0),
-            (1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1),
-            (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
-            (0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0),
-            (0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0),
-            (0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0),
-            (0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0),
-            (0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0),
-        ), dtype=np.bool8)
+    def __init__(self, level):
+        self.walls = np.array(level.walls, dtype=np.bool8)
         self.board_size = np.array(self.walls.shape, dtype=np.int8)
+
+        self.level = level
 
         self.reset()
 
@@ -108,15 +94,13 @@ class Game():
 
     def reset(self):
         self.empowered = 0
-        self.powerups = {(0, 10), (10, 0)}
-        self.food = set(zip(*(~self.walls).nonzero())) - self.powerups
-        self.ghosts = (
-            ChasingGhost(self, (10, 10)),
-            RandomGhost(self, (0, 0)),
-        )
-        self.pacman = np.array((5, 5), dtype=np.int8)
         self.score = 0
         self.state = Game.State.ACTIVE
+
+        self.food = set(self.level.food)
+        self.ghosts = tuple(ghost(self) for ghost in self.level.ghosts)
+        self.pacman = np.array(self.level.pacman, dtype=np.int8)
+        self.powerups = set(self.level.powerups)
 
     def step(self, direction):
         rewards = pd.Series(False, index=self.reward_scores.index, dtype=np.bool8)
