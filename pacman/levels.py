@@ -1,5 +1,7 @@
 from functools import partial
 
+import numpy as np
+
 from .ghosts import (
     ChasingGhost,
     RandomGhost,
@@ -51,4 +53,9 @@ level1 = Level(
         (0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0),
         (0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0),
     ),
+)
+
+tutorial_food = Level(
+    pacman=(3, 3),
+    walls=np.zeros((7, 7), dtype=np.int8),
 )
