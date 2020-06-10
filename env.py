@@ -6,8 +6,8 @@ from pacman.levels import *
 
 
 class PacMan:
-    def __init__(self, num_frames):
-        self.game = Game(tutorial_food)
+    def __init__(self, num_frames, radius):
+        self.game = Game(tutorial_ghost, radius)
         self.direction_dict = dict(enumerate(Direction))
 
         channels, height, width = self.game.array.shape
@@ -16,6 +16,7 @@ class PacMan:
         self.num_channels = self.game.array.shape[0]
         self.num_actions = len(Direction)
         self.frames = []
+        self.radius = radius
         self.pacman = None
 
     @property
@@ -26,13 +27,23 @@ class PacMan:
     def won(self):
         return self.game.state is Game.State.WON
 
-    def reset(self):
-        self.game.reset()
+    def frame(self):
+        y, x = self.game.pacman
 
-        self.frames = self.game.array.astype(np.float32).tolist()
+        frame = self.game.array
+        frame = frame[:, y - self.radius:y + self.radius + 1]
+        frame = frame[:, :, x - self.radius:x + self.radius + 1]
+        frame = frame.astype(np.float32).tolist()
+
+        return frame
+
+    def reset(self):
+        self.game.reset(self.radius)
+
+        self.frames = self.frame()
         for _ in range(self.num_frames - 1):
             self.game.step(self.direction_dict[0])
-            self.frames += self.game.array.astype(np.float32).tolist()
+            self.frames += self.frame()
 
         self.pacman = self.game.pacman.tolist()
 
@@ -40,9 +51,10 @@ class PacMan:
 
     def reward(self, rewards, pacman):
         reward = 10.0 if rewards.food else 0.0
-        reward += -1.0 * (self.pacman[0] == pacman[0] and self.pacman[1] == pacman[1])
-        reward += rewards.powerup * 50.0 + rewards.ghost * 200.0
-        reward += (self.game.state is Game.State.LOST) * -250.0
+        reward += -1.0 * (self.pacman == pacman)
+        reward += 20.0 * rewards.powerup + 40.0 * rewards.ghost
+        reward += -50.0 * (self.game.state is Game.State.LOST)
+        reward += 50 * (self.game.state is Game.State.WON)
 
         return reward
 
@@ -53,7 +65,7 @@ class PacMan:
 
         end = self.game.state in (Game.State.WON, Game.State.LOST)
         self.frames[:self.num_channels] = []
-        self.frames += self.game.array.astype(np.float32).tolist()
+        self.frames += self.frame()
         rewards = self.reward(rewards, self.game.pacman.tolist())
 
         self.pacman = self.game.pacman.tolist()

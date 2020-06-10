@@ -20,13 +20,14 @@ class Game:
         'ghost': 200,
     })
 
-    def __init__(self, level):
+    def __init__(self, level, radius):
         self.walls = np.array(level.walls, dtype=np.bool8)
+        self.walls = np.pad(self.walls, radius, mode='constant', constant_values=True)
         self.board_size = np.array(self.walls.shape, dtype=np.int8)
 
         self.level = level
 
-        self.reset()
+        self.reset(radius)
 
     def __str__(self):
         shape = self.board_size + (2, 3)  # add size for frame and newlines
@@ -92,15 +93,17 @@ class Game:
             or self.walls[tuple(position)]
         )
 
-    def reset(self):
+    def reset(self, radius):
         self.empowered = 0
         self.score = 0
         self.state = Game.State.ACTIVE
 
-        self.food = set(self.level.food)
+        self.food = set((y + radius, x + radius) for y, x in self.level.food)
         self.ghosts = tuple(ghost(self) for ghost in self.level.ghosts)
-        self.pacman = np.array(self.level.pacman, dtype=np.int8)
-        self.powerups = set(self.level.powerups)
+        for ghost in self.ghosts:
+            ghost.position += radius
+        self.pacman = np.array(self.level.pacman, dtype=np.int8) + radius
+        self.powerups = set((y + radius, x + radius) for y, x in self.level.powerups)
 
     def step(self, direction):
         rewards = pd.Series(False, index=self.reward_scores.index, dtype=np.bool8)

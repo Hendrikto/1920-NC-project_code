@@ -3,6 +3,7 @@ import argparse
 import numpy as np
 import pandas as pd
 import torch
+from utils.eval import plot_rewards
 
 from env import (
     EnsemblePacMan,
@@ -76,7 +77,7 @@ def parse_arguments():
     parser.add_argument(
         '-e', '--learning_rate',
         type=float,
-        default=0.01,
+        default=0.001,
         help='learning rate of Adam optimizer',
     )
     parser.add_argument(
@@ -118,8 +119,14 @@ def parse_arguments():
     parser.add_argument(
         '-u', '--num_update',
         type=int,
-        default=128,
+        default=512,
         help='period to update target network',
+    )
+    parser.add_argument(
+        '-k', '--radius',
+        type=int,
+        default=3,
+        help='radius around Pac-Man to select for environment state',
     )
     parser.add_argument(
         '-f', '--results_file',
@@ -141,7 +148,7 @@ def parse_arguments():
     parser.add_argument(
         '-o', '--train_onset',
         type=int,
-        default=40,
+        default=2048,
         help='number of memories before training',
     )
     parser.add_argument(
@@ -159,7 +166,7 @@ def parse_arguments():
     parser.add_argument(
         '--v_min',
         type=int,
-        default=-3.0,
+        default=-30.0,
         help='lowest x-value of Q-value distribution',
     )
 
@@ -181,7 +188,7 @@ def run_agent(
     train_period,
     results_file_name,
 ):
-    episode_wins, episode_steps, episode_scores = [[] for _ in range(3)]
+    episode_wins, episode_steps, episode_scores = np.zeros((3, num_episodes))
     for i_episode in range(num_episodes):
         state = env.reset()
         memory.reset(state)
@@ -194,19 +201,21 @@ def run_agent(
             if step % train_period == train_period - 1:
                 agent.train()
 
+            episode_scores[i_episode] += rewards
+
             if end:
                 break
 
-        print(env.game)
-
         # determine whether the agent lost or won
-        episode_wins.append(env.won)
-        episode_steps.append(step)
-        episode_scores.append(env.score)
+        episode_wins[i_episode] = env.won
+        episode_steps[i_episode] = step
         print(f'Episode {i_episode + 1} of {num_episodes}')
         print('--- WINNER ---' if episode_wins[i_episode] else '--- LOSER ---')
         print(f'Number of steps: {episode_steps[i_episode]}')
         print(f'Reward: {episode_scores[i_episode]}')
+
+        print(env.game)
+        plot_rewards(episode_scores[:i_episode + 1], window=5)
 
     # save wins, number of steps, and rewards of all episodes to CSV file
     stats = pd.DataFrame({
@@ -227,7 +236,7 @@ if __name__ == '__main__':
 
     if args.num_agents == 1:
         # initialize environment
-        env = PacMan(4)
+        env = PacMan(4, args.radius)
 
         # initialize memory and Q agent
         memory, agent = q_agent(env, args, device)
