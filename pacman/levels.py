@@ -24,10 +24,10 @@ class Level():
 
         if food is None:
             self.food = {
-                position
+                (y, x)
                 for y in range(len(walls))
                 for x in range(len(walls[0]))
-                if (position := (y, x)) not in powerups and not walls[y][x]
+                if (y, x) not in powerups and not walls[y][x]
             }
         else:
             self.food = ()

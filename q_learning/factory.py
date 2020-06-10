@@ -15,17 +15,17 @@ from .data import (
 )
 from .networks import (
     MLP,
-    EnsembleLinearModel,
-    LinearModel,
+    EnsembleDDQN,
+    DDQN,
 )
 
 
 def q_agent(env, args, device):
     # make function that initializes model
     model_fn = partial(
-        LinearModel,
+        DDQN,
         env.state_shape, env.num_actions,
-        args.num_hidden, args.num_atoms,
+        args.num_atoms,
         args.num_agents,
         device,
     )
@@ -68,9 +68,11 @@ def ensemble_q_agent(env, args, device):
 
     # make function that initializes model
     model_fn = partial(
-        EnsembleLinearModel,
-        env.state_shape, env.num_actions,
-        args.num_hidden, args.num_atoms,
+        EnsembleDDQN,
+        env.state_shape, env.num_frames,
+        args.channel_indices,
+        env.num_actions,
+        args.num_atoms,
         args.num_agents,
         device,
     )
@@ -119,9 +121,11 @@ def q_agent_mlp_combiner(env, args, device):
 
     # make function that initializes model
     model_fn = partial(
-        EnsembleLinearModel,
-        env.state_shape, env.num_actions,
-        args.num_hidden, args.num_atoms,
+        EnsembleDDQN,
+        env.state_shape, env.num_frames,
+        args.channel_indices,
+        env.num_actions,
+        args.num_atoms,
         args.num_agents,
         device,
     )

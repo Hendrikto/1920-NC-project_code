@@ -2,11 +2,12 @@ import numpy as np
 
 from pacman.direction import Direction
 from pacman.game import Game
+from pacman.levels import *
 
 
 class PacMan:
     def __init__(self, num_frames):
-        self.game = Game()
+        self.game = Game(tutorial_food)
         self.direction_dict = dict(enumerate(Direction))
 
         channels, height, width = self.game.array.shape
@@ -15,6 +16,7 @@ class PacMan:
         self.num_channels = self.game.array.shape[0]
         self.num_actions = len(Direction)
         self.frames = []
+        self.pacman = None
 
     @property
     def score(self):
@@ -32,10 +34,13 @@ class PacMan:
             self.game.step(self.direction_dict[0])
             self.frames += self.game.array.astype(np.float32).tolist()
 
+        self.pacman = self.game.pacman.tolist()
+
         return self.frames
 
-    def reward(self, rewards):
+    def reward(self, rewards, pacman):
         reward = 10.0 if rewards.food else 0.0
+        reward += -1.0 * (self.pacman[0] == pacman[0] and self.pacman[1] == pacman[1])
         reward += rewards.powerup * 50.0 + rewards.ghost * 200.0
         reward += (self.game.state is Game.State.LOST) * -250.0
 
@@ -49,8 +54,10 @@ class PacMan:
         end = self.game.state in (Game.State.WON, Game.State.LOST)
         self.frames[:self.num_channels] = []
         self.frames += self.game.array.astype(np.float32).tolist()
+        rewards = self.reward(rewards, self.game.pacman.tolist())
 
-        return end, self.frames, self.reward(rewards)
+        self.pacman = self.game.pacman.tolist()
+        return end, self.frames, rewards
 
 
 class EnsemblePacMan(PacMan):

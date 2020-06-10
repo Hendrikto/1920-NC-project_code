@@ -1,5 +1,6 @@
-import math
 from functools import reduce
+import math
+from operator import mul
 
 import torch
 import torch.nn as nn
@@ -282,7 +283,7 @@ class LinearModel(nn.Module):
         super(LinearModel, self).__init__()
 
         # initialize noisy linear layers
-        in_features = reduce(lambda x, y: x * y, state_shape)
+        in_features = reduce(mul, state_shape)
         self.fc1 = Linear(in_features, num_hidden, num_agents)
 
         self.fc2a = Linear(num_hidden, num_hidden, num_agents)
@@ -411,6 +412,251 @@ class EnsembleLinearModel(LinearModel):
 
         # dueling DQN, mean of advantage is forced to be zero
         return v + a - a.mean(dim=-2, keepdim=True)
+
+
+class DDQN(nn.Module):
+    """Implements a noisy dueling deep Q network.
+
+    Attributes:
+        conv1 = [nn.Module] first convolutional layer
+        conv2 = [nn.Module] second convolutional layer
+        conv3 = [nn.Module] third convolutional layer
+        conv4 = [nn.Module] fourth convolutional layer
+        fc1a = [NoisyLinear] hidden advantage noisy linear layer
+        fc1v = [NoisyLinear] hidden value noisy linear layer
+        fc2a = [NoisyLinear] output advantage noisy linear layer
+        fc2v = [NoisyLinear] output value noisy linear layer
+        num_atoms = [int] number of atoms in each Q-value distribution
+        num_agents = [int] number of independent sub-models
+        device = [torch.device] device to put the model on
+    """
+
+    def __init__(
+        self,
+        state_shape,
+        num_actions,
+        num_atoms,
+        num_agents,
+        device
+    ):
+        """Initializes the DDQN.
+
+        Args:
+            state_shape = [tuple] sizes of dimensions of an environment state
+            num_actions = [int] number of possible actions in environment
+            num_atoms = [int] number of atoms in each Q-value distribution
+            num_agents = [int] number of independent sub-models
+            device = [torch.device] device to put the model and data on
+        """
+        super(DDQN, self).__init__()
+
+        # initialize convolutional layers
+        num_channels, height, width = state_shape
+        self.conv1 = nn.Conv2d(
+            in_channels=num_channels * num_agents,
+            out_channels=num_channels*2 * num_agents,
+            kernel_size=1,
+            stride=1,
+            groups=num_agents,
+        )
+        self.conv2 = nn.Conv2d(
+            in_channels=num_channels*2 * num_agents,
+            out_channels=num_channels*4 * num_agents,
+            kernel_size=3,
+            stride=1,
+            groups=num_agents,
+        )
+        self.conv3 = nn.Conv2d(
+            in_channels=num_channels*4 * num_agents,
+            out_channels=num_channels*8 * num_agents,
+            kernel_size=3,
+            stride=1,
+            groups=num_agents,
+        )
+        self.conv4 = nn.Conv2d(
+            in_channels=num_channels*8 * num_agents,
+            out_channels=num_channels*12 * num_agents,
+            kernel_size=3,
+            stride=1,
+            groups=num_agents,
+        )
+
+        # initialize noisy linear layers
+        num_features = num_channels*12
+        self.fc1a = NoisyLinear(num_features, num_features, num_agents)
+        self.fc1v = NoisyLinear(num_features, num_features, num_agents)
+        self.fc2a = NoisyLinear(num_features, num_actions * num_atoms, num_agents)
+        self.fc2v = NoisyLinear(num_features, num_atoms, num_agents)
+
+        # put model on correct device
+        self.num_atoms = num_atoms
+        self.num_agents = num_agents
+        self.device = device
+        self.to(self.device)
+
+    def forward(self, input):
+        """Forward pass of the DDQN.
+
+        In QAgent.step():
+        Args:
+            input = [torch.Tensor] state of shape (channels, height, width)
+
+        Returns [torch.Tensor]:
+            Q-value distributions of shape (actions, atoms).
+
+        In QAgent.train():
+        Args:
+            input = [torch.Tensor] states of shape (batch_size, channels,
+                height, width)
+
+        Returns [torch.Tensor]:
+            Q-value distributions of shape (batch_size, actions, atoms).
+        """
+        # add batch dimension in QAgent.step()
+        x = input.unsqueeze(0) if input.ndim == 3 else input
+        x = x.to(self.device)
+
+        # run input through convolutional layers
+        h = F.relu(self.conv1(x))
+        h = F.relu(self.conv2(h))
+        h = F.relu(self.conv3(h))
+        h = F.relu(self.conv4(h))
+
+        # run latent vectors through noisy linear layers
+        h = h.flatten(start_dim=1)
+        ha = F.relu(self.fc1a(h))
+        hv = F.relu(self.fc1v(h))
+        a = self.fc2a(ha)
+        v = self.fc2v(hv)
+
+        # separate action and atom dimensions
+        a = a.view(v.shape[0], -1, self.num_atoms)
+        v = v.view(v.shape[0], 1, self.num_atoms)
+
+        # dueling DQN
+        y = v + a - a.mean(dim=1, keepdim=True)
+
+        return y.squeeze(0) if input.ndim == 3 else y
+
+
+class EnsembleDDQN(DDQN):
+    """Implements ensemble of noisy dueling deep Q networks.
+
+    Attributes:
+        conv1 = [nn.Module] first convolutional layer
+        conv2 = [nn.Module] second convolutional layer
+        conv3 = [nn.Module] third convolutional layer
+        conv4 = [nn.Module] fourth convolutional layer
+        fc1a = [NoisyLinear] hidden advantage noisy linear layer
+        fc1v = [NoisyLinear] hidden value noisy linear layer
+        fc2a = [NoisyLinear] output advantage noisy linear layer
+        fc2v = [NoisyLinear] output value noisy linear layer
+        num_atoms = [int] number of atoms in each Q-value distribution
+        num_agents = [int] number of independent sub-models
+        channel_idx = [torch.Tensor] index array of channels per agent
+        agent_idx = [torch.Tensor] index array in the agent dimension
+        device = [torch.device] device to put the model on
+    """
+
+    def __init__(
+        self,
+        state_shape,
+        num_frames,
+        channel_idx,
+        num_actions,
+        num_atoms,
+        num_agents,
+        device,
+    ):
+        """Initializes the ensemble DDQN.
+
+        Args:
+            state_shape = [tuple] sizes of dimensions of an environment state
+            num_frames = [int] number of frames in an environment state
+            channel_idx = [list] indices of channels per agent
+                The number of channels per agent must be constant to be able to
+                implement the Ensemble DDQN in one neural network.
+                For example: [[0, 1, 2], [0, 2, -1], [0, 3, -1]]; the first
+                agent gets channels 0, 1, and 2 from the state, the second
+                agent channels 0, 2, and the last channel, and so on.
+            num_actions = [int] number of possible actions in environment
+            num_atoms = [int] number of atoms in each Q-value distribution
+            num_agents = [int] number of independent sub-models
+            device = [torch.device] device to put the model on
+        """
+        # number of channels of the total state given as state to each agent
+        num_channels, height, width = state_shape
+        channel_idx = torch.tensor(channel_idx)
+        num_channels_per_agent = channel_idx.shape[1] * num_frames
+
+        # initialize network layers
+        super(EnsembleDDQN, self).__init__(
+            (num_channels_per_agent, height, width),
+            num_actions,
+            num_atoms,
+            num_agents,
+            device,
+        )
+
+        # determine indices of first channels of frames in environment state
+        num_channels_per_frame = num_channels // num_frames
+        frame_idx = torch.arange(0, num_channels, step=num_channels_per_frame)
+
+        # compute the channel indices for each agent and frame
+        self.channel_idx = channel_idx.unsqueeze(1) + frame_idx.unsqueeze(1)
+        self.channel_idx = self.channel_idx.flatten()
+
+        # set agent index array beforehand for faster indexing
+        self.agent_idx = torch.arange(num_agents)
+        self.agent_idx = self.agent_idx.repeat_interleave(num_channels_per_agent)
+
+    def forward(self, input):
+        """Forward pass of the ensemble of DDQNs.
+
+        In EnsembleQAgent.step():
+        Args:
+            input = [torch.Tensor] state of shape (channels, height, width)
+
+        Returns [torch.Tensor]:
+            Q-value distributions of shape (agents, actions, atoms).
+
+        In EnsembleQAgent.train():
+        Args:
+            input = [torch.Tensor] states of shape (batch_size, agents,
+                channels, height, width)
+
+        Returns [torch.Tensor]:
+            Q-value distributions of shape (batch_size, agents, actions, atoms).
+        """
+        if input.ndim == 3:  # in EnsembleQAgent.step()
+            x = input[None, self.channel_idx]
+        else:  # in EnsembleQAgent.train()
+            x = input[:, self.agent_idx, self.channel_idx]
+        x = x.to(self.device)
+
+        # run input through convolutional layers
+        h = F.relu(self.conv1(x))
+        h = F.relu(self.conv2(h))
+        h = F.relu(self.conv3(h))
+        h = F.relu(self.conv4(h))
+        h = F.relu(self.conv5(h))
+        h = F.relu(self.conv6(h))
+
+        # run latent vectors through noisy linear layers
+        h = h.flatten(start_dim=1)
+        ha = F.relu(self.fc1a(h))
+        hv = F.relu(self.fc1v(h))
+        a = self.fc2a(ha)
+        v = self.fc2v(hv)
+
+        # separate agent, action, and atom dimensions
+        a = a.view(v.shape[0], self.num_agents, -1, self.num_atoms)
+        v = v.view(v.shape[0], self.num_agents, 1, self.num_atoms)
+
+        # dueling DQN
+        y = v + a - a.mean(dim=2, keepdim=True)
+
+        return y.squeeze(0) if input.ndim == 3 else y
 
 
 class MLP(nn.Module):

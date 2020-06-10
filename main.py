@@ -1,5 +1,4 @@
 import argparse
-from itertools import count
 
 import numpy as np
 import pandas as pd
@@ -47,7 +46,7 @@ def parse_arguments():
     parser.add_argument(
         '-c', '--capacity',
         type=int,
-        default=10_000,
+        default=100_000,
         help='size of replay memory',
     )
     parser.add_argument(
@@ -113,13 +112,13 @@ def parse_arguments():
     parser.add_argument(
         '-n', '--num_transitions',
         type=int,
-        default=8,
+        default=3,
         help='number of transitions for N-step DQN',
     )
     parser.add_argument(
         '-u', '--num_update',
         type=int,
-        default=64,
+        default=128,
         help='period to update target network',
     )
     parser.add_argument(
@@ -134,50 +133,71 @@ def parse_arguments():
         help='run a trained agent',
     )
     parser.add_argument(
+        '-s', '--channel_indices',
+        type=list,
+        default=[[0, 1, 4], [0, 1, 2], [0, 1, 3], [0, 1, 5]],
+        help='channel indices of the state for each agent',
+    )
+    parser.add_argument(
         '-o', '--train_onset',
         type=int,
         default=40,
         help='number of memories before training',
     )
     parser.add_argument(
+        '-t', '--train_period',
+        type=int,
+        default=4,
+        help='number of steps between training the agent',
+    )
+    parser.add_argument(
         '--v_max',
         type=int,
-        default=250.0,
+        default=30.0,
         help='highest x-value of Q-value distribution',
     )
     parser.add_argument(
         '--v_min',
         type=int,
-        default=-250.0,
+        default=-3.0,
         help='lowest x-value of Q-value distribution',
     )
 
     return parser.parse_args()
 
 
-def print_arguments(arguments, width=80):
+def print_arguments(args, width=80):
     print(' Arguments '.center(width, '='))
     for argument_name, argument in vars(args).items():
         print(f'{argument_name} = {argument}')
     print('=' * width)
 
 
-def run_agent(env, memory, agent, num_episodes, train, results_file_name):
+def run_agent(
+    env,
+    memory,
+    agent,
+    num_episodes,
+    train_period,
+    results_file_name,
+):
     episode_wins, episode_steps, episode_scores = [[] for _ in range(3)]
     for i_episode in range(num_episodes):
         state = env.reset()
         memory.reset(state)
-        for step in count(1):
+        for step in range(1, 501):
             action = agent.step(state)
 
             end, state, rewards = env.step(action)
             memory.push(end, action, rewards, state)
 
-            if train:
+            if step % train_period == train_period - 1:
                 agent.train()
 
-            if end or step >= 500:
+            if end:
                 break
+
+        print(env.game)
 
         # determine whether the agent lost or won
         episode_wins.append(env.won)
@@ -213,7 +233,7 @@ if __name__ == '__main__':
         memory, agent = q_agent(env, args, device)
     else:
         # initialize environment
-        env = EnsemblePacMan(args.num_agents)
+        env = EnsemblePacMan(4)
 
         if args.combine_mode == 'mlp':
             # initialize memory and ensemble Q agent with MLP combiner
@@ -227,8 +247,8 @@ if __name__ == '__main__':
         agent.policy_net.load_state_dict(torch.load(args.model_path))
         agent.policy_net.eval()
         run_agent(env, memory, agent,
-                  args.num_episodes, False, args.results_file)
+                  args.num_episodes, 0, args.results_file)
     else:
         run_agent(env, memory, agent,
-                  args.num_episodes, True, args.results_file)
+                  args.num_episodes, args.train_period, args.results_file)
         torch.save(agent.policy_net.state_dict(), args.model_path)
