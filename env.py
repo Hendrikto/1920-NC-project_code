@@ -7,7 +7,7 @@ from pacman.levels import *
 
 class PacMan:
     def __init__(self, num_frames, radius):
-        self.game = Game(tutorial_ghost, radius)
+        self.game = Game(tutorial_powerup, radius)
         self.direction_dict = dict(enumerate(Direction))
 
         channels, height, width = self.game.array.shape

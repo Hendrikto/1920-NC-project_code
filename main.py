@@ -142,7 +142,7 @@ def parse_arguments():
     parser.add_argument(
         '-s', '--channel_indices',
         type=list,
-        default=[[0, 1, 4], [0, 1, 2], [0, 1, 3], [0, 1, 5]],
+        default=[[0, 1, 2, 3], [0, 1, 2, 3], [0, 1, 2, 3], [0, 1, 2, 3]],
         help='channel indices of the state for each agent',
     )
     parser.add_argument(
@@ -201,7 +201,7 @@ def run_agent(
             if step % train_period == train_period - 1:
                 agent.train()
 
-            episode_scores[i_episode] += rewards
+            episode_scores[i_episode] += np.mean(rewards)
 
             if end:
                 break
@@ -242,7 +242,7 @@ if __name__ == '__main__':
         memory, agent = q_agent(env, args, device)
     else:
         # initialize environment
-        env = EnsemblePacMan(4)
+        env = EnsemblePacMan(4, args.radius)
 
         if args.combine_mode == 'mlp':
             # initialize memory and ensemble Q agent with MLP combiner

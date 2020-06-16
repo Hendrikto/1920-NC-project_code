@@ -639,8 +639,6 @@ class EnsembleDDQN(DDQN):
         h = F.relu(self.conv2(h))
         h = F.relu(self.conv3(h))
         h = F.relu(self.conv4(h))
-        h = F.relu(self.conv5(h))
-        h = F.relu(self.conv6(h))
 
         # run latent vectors through noisy linear layers
         h = h.flatten(start_dim=1)
