@@ -73,13 +73,11 @@ class PacMan:
 
 
 class EnsemblePacMan(PacMan):
-    def reward(self, rewards):
-        ensemble_rewards = [0]*4
-        ensemble_rewards[0] = rewards.food * 10.0
-        ensemble_rewards[1] += rewards.ghost * 200.0 - (self.game.state is Game.State.LOST) * 200.0
-        ensemble_rewards[1] += (self.game.state is Game.State.LOST) * -200.0
-        ensemble_rewards[2] += rewards.ghost * 200.0
-        ensemble_rewards[2] += (self.game.state is Game.State.LOST) * -200.0
-        ensemble_rewards[3] = rewards.powerup * 50.0
+    def reward(self, rewards, pacman):
+        ensemble_rewards = np.zeros(4)
+        ensemble_rewards[0] = -9 + rewards.food * 49.0
+        ensemble_rewards[1] += (self.game.state is Game.State.ACTIVE) * 10 + (self.game.state is Game.State.LOST) * -250.0
+        ensemble_rewards[2] += rewards.ghost * 300.0
+        ensemble_rewards[3] = rewards.powerup * 90.0
 
         return np.array(ensemble_rewards, dtype=np.float32)
