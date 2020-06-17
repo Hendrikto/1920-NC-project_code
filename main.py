@@ -1,4 +1,5 @@
 import argparse
+from ast import literal_eval
 
 import numpy as np
 import pandas as pd
@@ -141,7 +142,7 @@ def parse_arguments():
     )
     parser.add_argument(
         '-s', '--channel_indices',
-        type=list,
+        type=literal_eval,
         default=[[0, 1, 2, 3], [0, 1, 2, 3], [0, 1, 2, 3], [0, 1, 2, 3]],
         help='channel indices of the state for each agent',
     )
