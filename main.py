@@ -189,7 +189,7 @@ def run_agent(
     train_period,
     results_file_name,
 ):
-    episode_wins, episode_steps, episode_scores = np.zeros((3, num_episodes))
+    episode_wins, episode_steps, episode_rewards, episode_scores = np.zeros((4, num_episodes))
     for i_episode in range(num_episodes):
         state = env.reset()
         memory.reset(state)
@@ -202,7 +202,7 @@ def run_agent(
             if step % train_period == train_period - 1:
                 agent.train()
 
-            episode_scores[i_episode] += np.mean(rewards)
+            episode_rewards[i_episode] += np.mean(rewards)
 
             if end:
                 break
@@ -210,19 +210,21 @@ def run_agent(
         # determine whether the agent lost or won
         episode_wins[i_episode] = env.won
         episode_steps[i_episode] = step
+        episode_scores[i_episode] = env.game.score
         print(f'Episode {i_episode + 1} of {num_episodes}')
         print('--- WINNER ---' if episode_wins[i_episode] else '--- LOSER ---')
         print(f'Number of steps: {episode_steps[i_episode]}')
-        print(f'Reward: {episode_scores[i_episode]}')
-
+        print(f'Reward: {episode_rewards[i_episode]}')
+        print(f'threshold for random action: {0.005 + 0.96 ** i_episode}')
         print(env.game)
-        plot_rewards(episode_scores[:i_episode + 1], window=5)
+        plot_rewards(episode_rewards[:i_episode + 1], episode_scores[:i_episode + 1], window=5)
 
     # save wins, number of steps, and rewards of all episodes to CSV file
     stats = pd.DataFrame({
         'wins': np.asarray(episode_wins),
         'num_steps': np.asarray(episode_steps),
-        'rewards': np.asarray(episode_scores),
+        'rewards': np.asarray(episode_rewards),
+        'scores': np.asarray(episode_scores),
     })
     stats.to_csv(results_file_name, index=False)
 
