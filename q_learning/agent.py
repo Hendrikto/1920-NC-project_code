@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -324,6 +325,7 @@ class EnsembleQAgent(QAgentBase):
 
         # set combiner attribute
         self.combiner = combiner
+        self.episodes_done = -1
 
     def step(self, state):
         """
@@ -339,6 +341,9 @@ class EnsembleQAgent(QAgentBase):
             Selected action encoded as number in the range [0, num_actions).
         """
         # apply Q-learning neural network to get Q-value distributions
+
+        self.episodes_done += 1
+
         with torch.no_grad():
             state = torch.tensor(state)
             q_distribution = F.softmax(self.policy_net(state), dim=-1)
@@ -348,5 +353,6 @@ class EnsembleQAgent(QAgentBase):
 
         # choose an action by greedily picking from Q table
         action = q_values.argmax()
-
+        if np.random.rand() < 0.005 + 0.96 ** self.episodes_done:
+            return np.random.choice(range(5))
         return int(action)
