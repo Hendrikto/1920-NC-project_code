@@ -246,7 +246,7 @@ class QAgent(QAgentBase):
         # choose an action by greedily picking from Q table
         action = q_values.argmax()
         if np.random.rand() < epsilon:
-            return np.random.choice(range(5))
+            return np.random.randint(5, dtype=np.int64)
 
         return int(action)
 
@@ -353,5 +353,5 @@ class EnsembleQAgent(QAgentBase):
         # choose an action by greedily picking from Q table
         action = q_values.argmax()
         if np.random.rand() < epsilon:
-            return np.random.choice(range(5))
+            return np.random.randint(5, dtype=np.int64)
         return int(action)
