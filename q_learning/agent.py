@@ -225,7 +225,7 @@ class QAgent(QAgentBase):
         # set Q-value index arrays beforehand for faster indexing
         self.q_indices = (torch.arange(self.batch_size),)
 
-    def step(self, state):
+    def step(self, state, epsilon):
         """
         Select an action for the current state, using the policy network.
 
@@ -245,6 +245,8 @@ class QAgent(QAgentBase):
 
         # choose an action by greedily picking from Q table
         action = q_values.argmax()
+        if np.random.rand() < epsilon:
+            return np.random.choice(range(5))
 
         return int(action)
 
@@ -325,9 +327,8 @@ class EnsembleQAgent(QAgentBase):
 
         # set combiner attribute
         self.combiner = combiner
-        self.episodes_done = -1
 
-    def step(self, state):
+    def step(self, state, epsilon):
         """
         Select an action for the current state, using the policy network.
 
@@ -342,8 +343,6 @@ class EnsembleQAgent(QAgentBase):
         """
         # apply Q-learning neural network to get Q-value distributions
 
-        self.episodes_done += 1
-
         with torch.no_grad():
             state = torch.tensor(state)
             q_distribution = F.softmax(self.policy_net(state), dim=-1)
@@ -353,6 +352,6 @@ class EnsembleQAgent(QAgentBase):
 
         # choose an action by greedily picking from Q table
         action = q_values.argmax()
-        if np.random.rand() < 0.005 + 0.96 ** self.episodes_done:
+        if np.random.rand() < epsilon:
             return np.random.choice(range(5))
         return int(action)
