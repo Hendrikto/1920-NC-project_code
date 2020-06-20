@@ -193,8 +193,9 @@ def run_agent(
     for i_episode in range(num_episodes):
         state = env.reset()
         memory.reset(state)
+        epsilon = 0.005 + 0.96 ** i_episode
         for step in range(1, 501):
-            action = agent.step(state)
+            action = agent.step(state, epsilon)
 
             end, state, rewards = env.step(action)
             memory.push(end, action, rewards, state)
@@ -215,9 +216,9 @@ def run_agent(
         print('--- WINNER ---' if episode_wins[i_episode] else '--- LOSER ---')
         print(f'Number of steps: {episode_steps[i_episode]}')
         print(f'Reward: {episode_rewards[i_episode]}')
-        print(f'threshold for random action: {0.005 + 0.96 ** i_episode}')
+        print(f'threshold for random action: {epsilon}')
         print(env.game)
-        plot_rewards(episode_rewards[:i_episode + 1], episode_scores[:i_episode + 1], window=5)
+        plot_rewards(episode_rewards[:i_episode + 1], episode_scores[:i_episode + 1], window=10)
 
     # save wins, number of steps, and rewards of all episodes to CSV file
     stats = pd.DataFrame({
