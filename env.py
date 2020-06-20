@@ -50,11 +50,12 @@ class PacMan:
         return self.frames
 
     def reward(self, rewards, pacman):
-        reward = 10.0 if rewards.food else 0.0
-        reward += -1.0 * (self.pacman == pacman)
-        reward += 20.0 * rewards.powerup + 40.0 * rewards.ghost
-        reward += -50.0 * (self.game.state is Game.State.LOST)
-        reward += 50 * (self.game.state is Game.State.WON)
+        reward = 10.0 if rewards.food else -2.25
+        reward += 2.5
+        #reward += -1.0 * (self.pacman == pacman)
+        reward += 22.5 * rewards.powerup + 75.0 * rewards.ghost
+        reward += -65.0 * (self.game.state is Game.State.LOST)
+        #reward += 50 * (self.game.state is Game.State.WON)
 
         return reward
 
