@@ -55,7 +55,7 @@ def parse_arguments():
         '-z', '--combine_mode',
         type=str,
         default='sum',
-        choices=('avg', 'max', 'min', 'mlp', 'sum', 'vote'),
+        choices=('avg', 'max', 'min', 'mlp', 'sum', 'vote', 'con'),
         help='mode of combiner function',
     )
     parser.add_argument(
