@@ -77,6 +77,41 @@ class Combiner:
 
         return votes
 
+    def con(self, q_distr):
+        q_distr = q_distr.prod(dim=0)
+        q_distr = q_distr / torch.sum(q_distr, dim=1, keepdim=True)
+        q_values = torch.sum(self.atoms * q_distr, dim=-1)
+
+        return q_values
+
+# class conflationCombiner(QAgent):
+
+#     def _init_(self,
+#         model_fn, lr,
+#         memory, batch_size,
+#         num_atoms, v_min, v_max,
+#         gamma, n,
+#         train_onset, num_update,
+#         device):
+#         self.atoms = torch.linspace(v_min, v_max, steps=num_atoms).to(device)
+
+#     def step(self, q_distr):
+#         """Combines Q-value distributions with a multilayer perceptron.
+
+#         Args:
+#             q_distr = [torch.Tensor<] Q-value distribution from each agent
+#                 They are normalized with shape (agents, num_actions, atoms).
+
+#         Returns [torch.Tensor]:
+#             Combined Q-values of shape (num_actions,).
+#         """
+
+#         q_distr = q_distr.prod(dim=0)
+#         q_distr = q_distr / torch.sum(q_distr, dim=1, keepdim=True)
+#         q_values = torch.sum(self.atoms * q_distr, dim=-1)
+
+#         return q_values
+
 
 class MLPCombiner(QAgent):
     """
