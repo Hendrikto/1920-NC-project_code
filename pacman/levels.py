@@ -59,3 +59,11 @@ tutorial_food = Level(
     pacman=(3, 3),
     walls=np.zeros((7, 7), dtype=np.int8),
 )
+
+tutorial_ghost = Level(
+    ghosts=(
+        partial(RandomGhost, position=(0, 0)),
+    ),
+    pacman=(3, 3),
+    walls=np.zeros((7, 7), dtype=np.int8),
+)
