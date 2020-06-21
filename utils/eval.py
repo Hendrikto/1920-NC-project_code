@@ -49,12 +49,12 @@ def plot_rewards(rewards, scores, window=10):
         ax_rewards = fig_rewards.add_subplot(2, 1, 1)
         ax_rewards.set_title('Smoothed episode rewards')
         ax_rewards.set_xlabel('Episode')
-        ax_rewards.set_ylabel(f'Reward')
+        ax_rewards.set_ylabel('Reward')
         rewards_plot = ax_rewards.plot(0)[0]
         ax_scores = fig_rewards.add_subplot(2, 1, 2)
         ax_scores.set_title('Smoothed episode scores')
         ax_scores.set_xlabel('Episode')
-        ax_scores.set_ylabel(f'Score')
+        ax_scores.set_ylabel('Score')
         scores_plot = ax_scores.plot(0)[0]
 
     ax_rewards.set_xlim(1, len(rewards))

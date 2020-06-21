@@ -437,7 +437,7 @@ class DDQN(nn.Module):
         num_actions,
         num_atoms,
         num_agents,
-        device
+        device,
     ):
         """Initializes the DDQN.
 

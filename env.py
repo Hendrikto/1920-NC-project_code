@@ -2,7 +2,7 @@ import numpy as np
 
 from pacman.direction import Direction
 from pacman.game import Game
-from pacman.levels import *
+from pacman.levels import tutorial_ghost_powerup
 
 
 class PacMan:
@@ -50,14 +50,13 @@ class PacMan:
         return self.frames
 
     def reward(self, rewards, pacman):
-        reward = 10.0 if rewards.food else -2.25
-        reward += 2.5
-        #reward += -1.0 * (self.pacman == pacman)
-        reward += 22.5 * rewards.powerup + 75.0 * rewards.ghost
-        reward += -65.0 * (self.game.state is Game.State.LOST)
-        #reward += 50 * (self.game.state is Game.State.WON)
-
-        return reward
+        return (
+            10.0 if rewards.food else -2.25
+            + 2.5 * (self.game.state is Game.State.ACTIVE)
+            + 22.5 * rewards.powerup
+            + 75.0 * rewards.ghost
+            - 65.0 * (self.game.state is Game.State.LOST)
+        )
 
     def step(self, action):
         direction = self.direction_dict[action]
@@ -75,10 +74,9 @@ class PacMan:
 
 class EnsemblePacMan(PacMan):
     def reward(self, rewards, pacman):
-        ensemble_rewards = np.zeros(4)
-        ensemble_rewards[0] = -9 + rewards.food * 49.0
-        ensemble_rewards[1] += (self.game.state is Game.State.ACTIVE) * 10 + (self.game.state is Game.State.LOST) * -250.0
-        ensemble_rewards[2] += rewards.ghost * 300.0
-        ensemble_rewards[3] = rewards.powerup * 90.0
-
-        return np.array(ensemble_rewards, dtype=np.float32)
+        return np.array((
+            40 if rewards.food else -9,
+            -250 if self.game.state is Game.State.LOST else 10,
+            300 * rewards.ghost,
+            90 * rewards.powerup,
+        ), dtype=np.float32)
