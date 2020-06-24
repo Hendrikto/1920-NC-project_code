@@ -3,7 +3,7 @@ import numpy as np
 
 from pacman.direction import Direction
 from pacman.game import Game
-from pacman.levels import tutorial_ghost_powerup
+from pacman.levels import tutorial_powerup
 
 
 class PacMan:
