@@ -83,7 +83,8 @@ def parse_arguments():
         '--level',
         type=str,
         default='tutorial_powerup',
-        help='Pac-Man level name'
+        choices=('level1', 'tutorial_food', 'tutorial_ghost', 'tutorial_powerup'),
+        help='Pac-Man level name',
     )
     parser.add_argument(
         '-p', '--model_path',
