@@ -202,7 +202,7 @@ def run_agent(
             end, state, rewards = env.step(action)
             memory.push(end, action, rewards, state)
 
-            if step % train_period == train_period - 1:
+            if train_period > 0 and step % train_period == train_period - 1:
                 agent.train()
 
             episode_rewards[i_episode] += np.mean(rewards)
