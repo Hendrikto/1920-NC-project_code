@@ -195,7 +195,9 @@ def run_agent(
         memory.reset(state)
         epsilon = 0.005 + 0.96 ** i_episode
         for step in range(1, 501):
-            action = agent.step(state, epsilon)
+            action = agent.step(state)
+            if np.random.rand() < epsilon:
+                action = np.random.randint(env.num_actions)
 
             end, state, rewards = env.step(action)
             memory.push(end, action, rewards, state)
