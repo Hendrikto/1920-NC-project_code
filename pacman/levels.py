@@ -67,3 +67,12 @@ tutorial_ghost = Level(
     pacman=(3, 3),
     walls=np.zeros((7, 7), dtype=np.int8),
 )
+
+tutorial_powerup = Level(
+    ghosts=(
+        partial(RandomGhost, position=(0, 0)),
+    ),
+    pacman=(3, 3),
+    powerups={(6, 6)},
+    walls=np.zeros((7, 7), dtype=np.int8),
+)
