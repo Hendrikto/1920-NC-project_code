@@ -1,5 +1,6 @@
 from functools import partial
 
+from env import CartPole
 from .agent import (
     EnsembleQAgent,
     QAgent,
@@ -16,19 +17,32 @@ from .data import (
 from .networks import (
     MLP,
     EnsembleDDQN,
+    EnsembleLinearModel,
     DDQN,
+    LinearModel,
 )
 
 
 def q_agent(env, args, device):
     # make function that initializes model
-    model_fn = partial(
-        DDQN,
-        env.state_shape, env.num_actions,
-        args.num_atoms,
-        args.num_agents,
-        device,
-    )
+    if isinstance(env, CartPole):
+        model_fn = partial(
+            LinearModel,
+            env.state_shape,
+            env.num_actions,
+            args.num_hidden,
+            args.num_atoms,
+            args.num_agents,
+            device,
+        )
+    else:
+        model_fn = partial(
+            DDQN,
+            env.state_shape, env.num_actions,
+            args.num_atoms,
+            args.num_agents,
+            device,
+        )
 
     # initialize replay memory
     memory = ReplayMemory(
@@ -51,6 +65,28 @@ def q_agent(env, args, device):
     return memory, agent
 
 
+def ensemble_network(env, args, device):
+    if isinstance(env, CartPole):
+        return partial(
+            EnsembleLinearModel,
+            env.state_shape, env.num_actions,
+            args.num_hidden, args.num_atoms,
+            args.num_agents,
+            device
+        )
+    else:
+        return partial(
+            EnsembleDDQN,
+            env.state_shape,
+            env.num_frames,
+            args.channel_indices,
+            env.num_actions,
+            args.num_atoms,
+            args.num_agents,
+            device,
+        )
+
+
 def ensemble_q_agent(env, args, device):
     combiner = Combiner(
         args.combine_mode,
@@ -67,15 +103,7 @@ def ensemble_q_agent(env, args, device):
     )
 
     # make function that initializes model
-    model_fn = partial(
-        EnsembleDDQN,
-        env.state_shape, env.num_frames,
-        args.channel_indices,
-        env.num_actions,
-        args.num_atoms,
-        args.num_agents,
-        device,
-    )
+    model_fn = ensemble_network(env, args, device)
 
     # initialize agent
     agent = EnsembleQAgent(
@@ -120,15 +148,7 @@ def q_agent_mlp_combiner(env, args, device):
     )
 
     # make function that initializes model
-    model_fn = partial(
-        EnsembleDDQN,
-        env.state_shape, env.num_frames,
-        args.channel_indices,
-        env.num_actions,
-        args.num_atoms,
-        args.num_agents,
-        device,
-    )
+    model_fn = ensemble_network(env, args, device)
 
     # initialize agent
     agent = EnsembleQAgent(
@@ -144,5 +164,20 @@ def q_agent_mlp_combiner(env, args, device):
 
     # set policy net to compute Q-value distributions at end of episode
     memory.policy_net = agent.policy_net
+
+    return memory, agent
+
+
+def memory_agent(env, args, device):
+    if args.num_agents == 1:
+        # initialize memory and Q agent
+        memory, agent = q_agent(env, args, device)
+    else:
+        if args.combine_mode == 'mlp':
+            # initialize memory and ensemble Q agent with MLP combiner
+            memory, agent = q_agent_mlp_combiner(env, args, device)
+        else:
+            # initialize memory and ensemble Q agent
+            memory, agent = ensemble_q_agent(env, args, device)
 
     return memory, agent

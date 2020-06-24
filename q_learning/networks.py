@@ -359,11 +359,15 @@ class EnsembleLinearModel(LinearModel):
         device     = [torch.device] device to put the model and data on
     """
 
-    def __init__(self,
-                 state_shape, num_actions,
-                 num_hidden, num_atoms,
-                 num_agents,
-                 device):
+    def __init__(
+        self,
+        state_shape,
+        num_actions,
+        num_hidden,
+        num_atoms,
+        num_agents,
+        device,
+    ):
         """Initializes the ensemble linear model.
 
         Args:
@@ -375,8 +379,10 @@ class EnsembleLinearModel(LinearModel):
             device      = [torch.device] device to put the model and data on
         """
         super(EnsembleLinearModel, self).__init__(
-            state_shape, num_actions,
-            num_hidden, num_atoms,
+            state_shape,
+            num_actions,
+            num_hidden,
+            num_atoms,
             num_agents,
             device,
         )

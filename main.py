@@ -6,15 +6,8 @@ import pandas as pd
 import torch
 from utils.eval import plot_rewards
 
-from env import (
-    EnsemblePacMan,
-    PacMan,
-)
-from q_learning.factory import (
-    ensemble_q_agent,
-    q_agent,
-    q_agent_mlp_combiner,
-)
+from env import environment
+from q_learning.factory import memory_agent
 
 
 def parse_arguments():
@@ -50,6 +43,11 @@ def parse_arguments():
         type=int,
         default=100_000,
         help='size of replay memory',
+    )
+    parser.add_argument(
+        '--cartpole',
+        action='store_true',
+        help='switch to use the CartPole environment',
     )
     parser.add_argument(
         '-z', '--combine_mode',
@@ -189,11 +187,13 @@ def run_agent(
     train_period,
     results_file_name,
 ):
-    episode_wins, episode_steps, episode_rewards, episode_scores = np.zeros((4, num_episodes))
+    metrics = np.zeros((4, num_episodes))
+    episode_wins, episode_steps, episode_rewards, episode_scores = metrics
     for i_episode in range(num_episodes):
         state = env.reset()
         memory.reset(state)
         epsilon = 0.005 + 0.96 ** i_episode
+
         for step in range(1, 501):
             action = agent.step(state)
             if np.random.rand() < epsilon:
@@ -202,7 +202,7 @@ def run_agent(
             end, state, rewards = env.step(action)
             memory.push(end, action, rewards, state)
 
-            if train_period > 0 and step % train_period == train_period - 1:
+            if train_period > 0 and step % train_period == 0:
                 agent.train()
 
             episode_rewards[i_episode] += np.mean(rewards)
@@ -213,16 +213,20 @@ def run_agent(
         # determine whether the agent lost or won
         episode_wins[i_episode] = env.won
         episode_steps[i_episode] = step
-        episode_scores[i_episode] = env.game.score
+        episode_scores[i_episode] = env.score
         print(f'Episode {i_episode + 1} of {num_episodes}')
         print('--- WINNER ---' if episode_wins[i_episode] else '--- LOSER ---')
         print(f'Number of steps: {episode_steps[i_episode]}')
         print(f'Reward: {episode_rewards[i_episode]}')
         print(f'threshold for random action: {epsilon}')
-        print(env.game)
-        plot_rewards(episode_rewards[:i_episode + 1], episode_scores[:i_episode + 1], window=10)
+        env.render()
+        plot_rewards(
+            episode_rewards[:i_episode + 1],
+            episode_scores[:i_episode + 1],
+            window=10
+        )
 
-    # save wins, number of steps, and rewards of all episodes to CSV file
+    # save wins, steps, mean rewards, and scores of all episodes to CSV file
     stats = pd.DataFrame({
         'wins': np.asarray(episode_wins),
         'num_steps': np.asarray(episode_steps),
@@ -240,24 +244,11 @@ if __name__ == '__main__':
     # make CPU or GPU based on console argument
     device = torch.device('cuda' if args.cuda else 'cpu')
 
-    if args.num_agents == 1:
-        # initialize environment
-        env = PacMan(4, args.radius)
+    # initialize environment, memory, and agent
+    env = environment(args.num_agents, 4, args.radius, args.cartpole)
+    memory, agent = memory_agent(env, args, device)
 
-        # initialize memory and Q agent
-        memory, agent = q_agent(env, args, device)
-    else:
-        # initialize environment
-        env = EnsemblePacMan(4, args.radius)
-
-        if args.combine_mode == 'mlp':
-            # initialize memory and ensemble Q agent with MLP combiner
-            memory, agent = q_agent_mlp_combiner(env, args, device)
-        else:
-            # initialize memory and ensemble Q agent
-            memory, agent = ensemble_q_agent(env, args, device)
-
-    # run or train the agent
+    # run or train agent
     if args.run:
         agent.policy_net.load_state_dict(torch.load(args.model_path))
         agent.policy_net.eval()
