@@ -80,6 +80,12 @@ def parse_arguments():
         help='learning rate of Adam optimizer',
     )
     parser.add_argument(
+        '--level',
+        type=str,
+        default='tutorial_powerup',
+        help='Pac-Man level name'
+    )
+    parser.add_argument(
         '-p', '--model_path',
         type=str,
         default='model.pt',
@@ -245,7 +251,13 @@ if __name__ == '__main__':
     device = torch.device('cuda' if args.cuda else 'cpu')
 
     # initialize environment, memory, and agent
-    env = environment(args.num_agents, 4, args.radius, args.cartpole)
+    env = environment(
+        args.num_agents,
+        4,
+        args.radius,
+        args.cartpole,
+        args.level,
+    )
     memory, agent = memory_agent(env, args, device)
 
     # run or train agent

@@ -1,14 +1,14 @@
 import gym
 import numpy as np
 
+from pacman import levels
 from pacman.direction import Direction
 from pacman.game import Game
-from pacman.levels import tutorial_powerup
 
 
 class PacMan:
-    def __init__(self, num_frames, radius):
-        self.game = Game(tutorial_powerup, radius)
+    def __init__(self, num_frames, radius, level):
+        self.game = Game(level, radius)
         self.direction_dict = dict(enumerate(Direction))
 
         self.num_channels, height, width = self.game.array.shape
@@ -71,10 +71,21 @@ class PacMan:
         return end, self.frames, rewards
 
 
-class EnsemblePacMan(PacMan):
+class EnsemblePacManPowerup(PacMan):
     def reward(self, rewards):
         return np.array((
             40 if rewards.food else -9,
+            -250 if self.game.state is Game.State.LOST else 10,
+            300 * rewards.ghost,
+            90 * rewards.powerup,
+        ), dtype=np.float32)
+
+
+class EnsemblePacManLevel1(PacMan):
+    def reward(self, rewards):
+        return np.array((
+            40 if rewards.food else -9,
+            -250 if self.game.state is Game.State.LOST else 10,
             -250 if self.game.state is Game.State.LOST else 10,
             300 * rewards.ghost,
             90 * rewards.powerup,
@@ -135,7 +146,7 @@ class EnsembleCartPole(CartPole):
         return np.full(self.num_agents, reward, dtype=np.float32)
 
 
-def environment(num_agents, num_frames, radius, cartpole):
+def environment(num_agents, num_frames, radius, cartpole, level):
     if cartpole:
         if num_agents == 1:
             return CartPole()
@@ -143,6 +154,9 @@ def environment(num_agents, num_frames, radius, cartpole):
         return EnsembleCartPole(num_agents)
 
     if num_agents == 1:
-        return PacMan(num_frames, radius)
+        return PacMan(num_frames, radius, getattr(levels, level))
 
-    return EnsemblePacMan(num_frames, radius)
+    if level == 'level1':
+        return EnsemblePacManLevel1(num_frames, radius, getattr(levels, level))
+
+    return EnsemblePacManPowerup(num_frames, radius, getattr(levels, level))
