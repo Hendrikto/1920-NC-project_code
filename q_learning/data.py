@@ -310,7 +310,7 @@ class MetaMemory:
     Attributes:
         ensemble_memory = [EnsembleMemory] replay memory for Ensemble Q-Learning
         combiner_memory = [ReplayMemory] replay memory for MLP combiner function
-        policy_net = [nn.Module] model to get last q_distr of episode
+        policy_net = [nn.Module] model to get last Q distribution of episode
         end = [bool] whether the episode has finished
         action = [int] performed action in range [0, num_actions)
         reward = [float] mean of rewards received after doing action
@@ -354,31 +354,31 @@ class MetaMemory:
         """Resets replay memories at start of each episode.
 
         Args:
-            state = [np.ndarray] first state of the environment
+            state = [list] first state of the environment
         """
         self.ensemble_memory.reset(state)
         self.combiner_memory.reset(None)
 
-    def step(self, q_distr):
+    def step(self, q_distributions):
         """Pushes new transition to replay memory for MLP combiner function.
 
-        At the start of an episode, q_distr replaces the None distribution
+        At the start of an episode, q_distributions replaces the None
         after setting it in reset(). At other times, a transition is pushed
         with self.end, self.action, and self.reward.
 
         Args:
-            q_distr = [torch.Tensor] Q-value distribution of each agent
+            q_distributions = [torch.Tensor] Q-value distribution of each agent
                 They are normalized with shape (agents, num_actions, atoms).
         """
         # turn Q-value distributions into NumPy ndarray
-        q_distr = q_distr.cpu().numpy()
+        q_distributions = q_distributions.cpu().numpy()
 
         if self.combiner_memory.transitions[0] is None:
-            # replace None q_distr at start of episode
-            self.combiner_memory.transitions = [q_distr]
+            # replace None at start of episode
+            self.combiner_memory.transitions = [q_distributions]
         else:
             # add new transition to replay memory given saved data
-            transition = self.end, self.action, self.reward, q_distr
+            transition = self.end, self.action, self.reward, q_distributions
             self.combiner_memory.push(*transition)
 
     def push(self, end, action, rewards, state):
@@ -394,7 +394,7 @@ class MetaMemory:
             end = [bool] whether the episode has finished
             action = [int] performed action in range [0, num_actions)
             rewards = [np.ndarray] rewards after performing action
-            state = [np.ndarray] current state of the environment
+            state = [list] current state of the environment
         """
         self.ensemble_memory.push(end, action, rewards, state)
 
@@ -406,7 +406,7 @@ class MetaMemory:
             # apply Q-learning neural network to get Q-value distributions
             with torch.no_grad():
                 state = torch.tensor(state)
-                q_distr = F.softmax(self.policy_net(state), dim=-1)
+                q_distributions = F.softmax(self.policy_net(state), dim=-1)
 
-            # add last Q-value distributions to replay memory of combiner
-            self.step(q_distr)
+            # add last Q-value distributions to replay memory of MLP combiner
+            self.step(q_distributions)

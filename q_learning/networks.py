@@ -41,13 +41,13 @@ class CategoricalLoss(nn.Module):
     def forward(self, q_pred, q_target, ends, returns, is_weights):
         """Computes magnitudes and loss.
 
-        More specifically, the magnitudes are the N-step cross entropies for
+        More specifically, the magnitudes are the N-step cross-entropies for
         each Q-value distribution and the loss is a weighted sum over the
         magnitudes weighted by the given importance sampling weights.
 
         Args [[torch.Tensor]*5]:
             q_pred     = predicted Q-value distributions on oldest states
-                They are not normalized with shape (batch_size, *, atoms).
+                They are log normalized with shape (batch_size, *, atoms).
             q_target   = target Q-value distributions on newest states
                 They are normalized with shape (batch_size, *, atoms).
             ends       = whether the episode has ended of shape (batch_size, *)
@@ -83,7 +83,7 @@ class CategoricalLoss(nn.Module):
         m.put_(floor + offset, q_target * (floor == ceil), accumulate=True)
 
         # loss as weighted N-step cross-entropy over Q-value distributions
-        magnitudes = -torch.sum(m * F.log_softmax(q_pred, dim=-1), dim=-1)
+        magnitudes = -torch.sum(m * q_pred, dim=-1)
         loss = torch.sum(is_weights * magnitudes) / magnitudes.shape[0]
 
         return magnitudes, loss
@@ -93,8 +93,8 @@ def _weight_indices(self, in_features, out_features):
     """Computes index arrays of inter-agent weights of a linear layer.
 
     Args:
-        self         = [nn.Module] network module to compute index arrays for
-        in_features  = [int] number of input units per agent
+        self = [nn.Module] network module to compute index arrays for
+        in_features = [int] number of input units per agent
         out_features = [int] number of output units per agent
 
     Returns [[torch.Tensor]*2]:
@@ -117,14 +117,14 @@ def _weight_indices(self, in_features, out_features):
 
 
 class Linear(nn.Module):
-    """Implements a standard linear layer.
+    """Implements a fully-connected layer with independent sub-layers.
 
     Attributes:
-        num_in     = [int] total number of input units
-        num_out    = [int] total number of output units
+        num_in = [int] total number of input units
+        num_out = [int] total number of output units
         weight_idx = [[torch.Tensor]*2] weight indices to set inter-agent
             weights to zero to ensure independence between each agent's network
-        linear     = [nn.Linear] linear layer module
+        linear = [nn.Linear] linear layer module
     """
 
     def __init__(self, in_features, out_features, num_agents=1):
@@ -169,16 +169,16 @@ class Linear(nn.Module):
 
 
 class NoisyLinear(nn.Module):
-    """Implements a noisy linear layer with factorized Gaussian noise.
+    """Implements a noisy fully-connected layer with independent sub-layers.
 
     Attributes:
-        num_in       = [int] total number of input units
-        num_out      = [int] total number of output units
-        weight_mu    = [nn.Parameter] learnable weight mean parameters
-        weight_sigma = [nn.Parameter] learnable weight stdev parameters
-        bias_mu      = [nn.Parameter] learnable bias mean parameters
-        bias_sigma   = [nn.Parameter] learnable bias stdev parameters
-        weight_idx   = [[torch.Tensor]*2] weight index arrays
+        num_in = [int] total number of input units
+        num_out = [int] total number of output units
+        weight_mu = [nn.Parameter] learnable weight mean parameters
+        weight_sigma = [nn.Parameter] learnable weight stddev parameters
+        bias_mu = [nn.Parameter] learnable bias mean parameters
+        bias_sigma = [nn.Parameter] learnable bias stddev parameters
+        weight_idx = [[torch.Tensor]*2] weight index arrays
             These are used to set inter-agent weights and weight gradients to
             zero to ensure independence between each agent's network.
     """
@@ -252,7 +252,7 @@ class NoisyLinear(nn.Module):
 
 
 class LinearModel(nn.Module):
-    """Implements network as sequence of noisy linear layers.
+    """Implements network as sequence of linear layers.
 
     Attributes:
         fc1        = [Linear] first linear layer
@@ -265,11 +265,15 @@ class LinearModel(nn.Module):
         device     = [torch.device] device to put the model and data on
     """
 
-    def __init__(self,
-                 state_shape, num_actions,
-                 num_hidden, num_atoms,
-                 num_agents,
-                 device):
+    def __init__(
+        self,
+        state_shape,
+        num_actions,
+        num_hidden,
+        num_atoms,
+        num_agents,
+        device
+    ):
         """Initializes the linear model.
 
         Args:
@@ -282,7 +286,7 @@ class LinearModel(nn.Module):
         """
         super(LinearModel, self).__init__()
 
-        # initialize noisy linear layers
+        # initialize linear layers
         in_features = reduce(mul, state_shape)
         self.fc1 = Linear(in_features, num_hidden, num_agents)
 
@@ -308,6 +312,9 @@ class LinearModel(nn.Module):
                 In agent.step(), the input has shape state_shape.
                 In agent.train(), the input has shape
                 (batch_size,) + state_shape.
+
+        Returns [torch.Tensor]:
+            Q-value distributions of shape ([batch_size], actions, num_atoms).
         """
         # get input to correct number of dimensions and device
         if input.ndim == self.state_ndim:
@@ -338,7 +345,7 @@ class LinearModel(nn.Module):
 
 
 class EnsembleLinearModel(LinearModel):
-    """Implements network as sequence of noisy linear layers.
+    """Implements ensemble network as sequence of linear layers.
 
     Attributes:
         fc1        = [Linear] first linear layer
@@ -357,7 +364,7 @@ class EnsembleLinearModel(LinearModel):
                  num_hidden, num_atoms,
                  num_agents,
                  device):
-        """Initializes the linear model.
+        """Initializes the ensemble linear model.
 
         Args:
             state_shape = [tuple] sizes of dimensions of an environment state
@@ -378,13 +385,17 @@ class EnsembleLinearModel(LinearModel):
         self.num_agents = num_agents
 
     def forward(self, input):
-        """Forward pass of the linear model.
+        """Forward pass of the ensemble linear model.
 
         Args:
             input = [torch.Tensor] a single state or a batch of states
                 In agent.step(), the input has shape state_shape.
                 In agent.train(), the input has shape
                 (batch_size, agents) + state_shape.
+
+        Returns [torch.Tensor]:
+            Q-value distributions of shape ([batch_size], agents,
+            actions, num_atoms).
         """
         # get input to correct number of dimensions and device
         if input.ndim == self.state_ndim:
@@ -422,13 +433,13 @@ class DDQN(nn.Module):
         conv2 = [nn.Module] second convolutional layer
         conv3 = [nn.Module] third convolutional layer
         conv4 = [nn.Module] fourth convolutional layer
-        fc1a = [NoisyLinear] hidden advantage noisy linear layer
-        fc1v = [NoisyLinear] hidden value noisy linear layer
-        fc2a = [NoisyLinear] output advantage noisy linear layer
-        fc2v = [NoisyLinear] output value noisy linear layer
+        fc5a = [NoisyLinear] hidden advantage noisy linear layer
+        fc5v = [NoisyLinear] hidden value noisy linear layer
+        fc6a = [NoisyLinear] output advantage noisy linear layer
+        fc6v = [NoisyLinear] output value noisy linear layer
         num_atoms = [int] number of atoms in each Q-value distribution
         num_agents = [int] number of independent sub-models
-        device = [torch.device] device to put the model on
+        device = [torch.device] device to put the model and data on
     """
 
     def __init__(
@@ -483,10 +494,10 @@ class DDQN(nn.Module):
 
         # initialize noisy linear layers
         num_features = num_channels*12
-        self.fc1a = NoisyLinear(num_features, num_features, num_agents)
-        self.fc1v = NoisyLinear(num_features, num_features, num_agents)
-        self.fc2a = NoisyLinear(num_features, num_actions * num_atoms, num_agents)
-        self.fc2v = NoisyLinear(num_features, num_atoms, num_agents)
+        self.fc5a = NoisyLinear(num_features, num_features, num_agents)
+        self.fc5v = NoisyLinear(num_features, num_features, num_agents)
+        self.fc6a = NoisyLinear(num_features, num_actions * num_atoms, num_agents)
+        self.fc6v = NoisyLinear(num_features, num_atoms, num_agents)
 
         # put model on correct device
         self.num_atoms = num_atoms
@@ -502,7 +513,7 @@ class DDQN(nn.Module):
             input = [torch.Tensor] state of shape (channels, height, width)
 
         Returns [torch.Tensor]:
-            Q-value distributions of shape (actions, atoms).
+            Q-value distribution of shape (actions, atoms).
 
         In QAgent.train():
         Args:
@@ -524,10 +535,10 @@ class DDQN(nn.Module):
 
         # run latent vectors through noisy linear layers
         h = h.flatten(start_dim=1)
-        ha = F.relu(self.fc1a(h))
-        hv = F.relu(self.fc1v(h))
-        a = self.fc2a(ha)
-        v = self.fc2v(hv)
+        ha = F.relu(self.fc5a(h))
+        hv = F.relu(self.fc5v(h))
+        a = self.fc6a(ha)
+        v = self.fc6v(hv)
 
         # separate action and atom dimensions
         a = a.view(v.shape[0], -1, self.num_atoms)
@@ -547,15 +558,15 @@ class EnsembleDDQN(DDQN):
         conv2 = [nn.Module] second convolutional layer
         conv3 = [nn.Module] third convolutional layer
         conv4 = [nn.Module] fourth convolutional layer
-        fc1a = [NoisyLinear] hidden advantage noisy linear layer
-        fc1v = [NoisyLinear] hidden value noisy linear layer
-        fc2a = [NoisyLinear] output advantage noisy linear layer
-        fc2v = [NoisyLinear] output value noisy linear layer
+        fc5a = [NoisyLinear] hidden advantage noisy linear layer
+        fc5v = [NoisyLinear] hidden value noisy linear layer
+        fc6a = [NoisyLinear] output advantage noisy linear layer
+        fc6v = [NoisyLinear] output value noisy linear layer
         num_atoms = [int] number of atoms in each Q-value distribution
         num_agents = [int] number of independent sub-models
         channel_idx = [torch.Tensor] index array of channels per agent
         agent_idx = [torch.Tensor] index array in the agent dimension
-        device = [torch.device] device to put the model on
+        device = [torch.device] device to put the model and data on
     """
 
     def __init__(
@@ -642,10 +653,10 @@ class EnsembleDDQN(DDQN):
 
         # run latent vectors through noisy linear layers
         h = h.flatten(start_dim=1)
-        ha = F.relu(self.fc1a(h))
-        hv = F.relu(self.fc1v(h))
-        a = self.fc2a(ha)
-        v = self.fc2v(hv)
+        ha = F.relu(self.fc5a(h))
+        hv = F.relu(self.fc5v(h))
+        a = self.fc6a(ha)
+        v = self.fc6v(hv)
 
         # separate agent, action, and atom dimensions
         a = a.view(v.shape[0], self.num_agents, -1, self.num_atoms)
@@ -666,10 +677,14 @@ class MLP(nn.Module):
         device  = [torch.device] device to put the model on
     """
 
-    def __init__(self,
-                 num_agents, num_actions,
-                 num_hidden, num_atoms,
-                 device):
+    def __init__(
+        self,
+        num_agents,
+        num_actions,
+        num_hidden,
+        num_atoms,
+        device
+    ):
         """Initializes the MLP.
 
         Args:

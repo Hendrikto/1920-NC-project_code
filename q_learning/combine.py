@@ -6,10 +6,10 @@ from .agent import QAgent
 
 class Combiner:
     """
-    Combines Q-value distributions arithmetically or with voting.
+    Combines Q-value distributions arithmetically or with voting or conflation.
 
     Attributes:
-        mode = [str] type of combiner function from {sum, min, max, avg, vote}
+        mode = [str] combiner function type from {sum, min, max, avg, vote, con}
         atoms = [torch.Tensor] Q-value positions of all the atoms
     """
 
@@ -23,40 +23,37 @@ class Combiner:
         self.mode = mode
         self.atoms = torch.linspace(v_min, v_max, steps=num_atoms).to(device)
 
-    def step(self, q_distr):
+    def step(self, q_distributions):
         """
         Combine Q-value distributions.
 
         Args:
-            q_distr = [torch.Tensor] Q-value distribution from each agent
+            q_distributions = [torch.Tensor] Q-value distribution for each agent
                 They are normalized with shape (agents, num_actions, atoms).
 
         Returns [torch.Tensor]:
             Combined Q-values of shape (num_actions,).
         """
-        q_values = torch.sum(self.atoms * q_distr, dim=-1)
-
         combiner_function = getattr(self, self.mode)
-        return combiner_function(q_values)
+        return combiner_function(q_distributions)
 
-    @staticmethod
-    def sum(q_values):
+    def sum(self, q_distributions):
+        q_values = torch.sum(self.atoms * q_distributions, dim=-1)
         return q_values.sum(dim=0)
 
-    @staticmethod
-    def min(q_values):
+    def min(self, q_distributions):
+        q_values = torch.sum(self.atoms * q_distributions, dim=-1)
         return q_values.min(dim=0)[0]
 
-    @staticmethod
-    def max(q_values):
+    def max(self, q_distributions):
+        q_values = torch.sum(self.atoms * q_distributions, dim=-1)
         return q_values.max(dim=0)[0]
 
-    @staticmethod
-    def avg(q_values):
+    def avg(self, q_distributions):
+        q_values = torch.sum(self.atoms * q_distributions, dim=-1)
         return q_values.mean(dim=0)
 
-    @staticmethod
-    def vote(q_values):
+    def vote(self, q_distributions):
         """
         Combine expected Q-values through majority voting.
 
@@ -65,52 +62,38 @@ class Combiner:
         each such action is uniformly selected, instead of always the last one.
 
         Args:
-            q_values = [torch.Tensor] expected Q-values from each agent
-                The shape is (agents, num_actions).
+            q_distributions = [torch.Tensor] Q-value distribution for each agent
+                They are normalized with shape (agents, num_actions, atoms).
 
         Returns [torch.Tensor]:
             Combined Q-values of shape (num_actions,).
         """
+        q_values = torch.sum(self.atoms * q_distributions, dim=-1)
+
         indices = q_values.argmax(dim=1)
         votes = torch.bincount(indices, minlength=q_values.shape[1])
         votes = votes.float() + torch.rand_like(q_values[0])
 
         return votes
 
-    def con(self, q_distr):
-        q_distr = q_distr.prod(dim=0)
-        q_distr = q_distr / torch.sum(q_distr, dim=1, keepdim=True)
-        q_values = torch.sum(self.atoms * q_distr, dim=-1)
+    def con(self, q_distributions):
+        """
+        Combine Q-value distributions with conflation.
+
+        See https://arxiv.org/pdf/0808.1808v4.pdf for the paper by Hill.
+
+        Args:
+            q_distributions = [torch.Tensor] Q-value distribution for each agent
+                They are normalized with shape (agents, num_actions, atoms).
+
+        Returns [torch.Tensor]:
+            Combined Q-values of shape (num_actions,).
+        """
+        q_distributions = q_distributions.prod(dim=0)
+        q_distributions /= torch.sum(q_distributions, dim=-1, keepdim=True)
+        q_values = torch.sum(self.atoms * q_distributions, dim=-1)
 
         return q_values
-
-# class conflationCombiner(QAgent):
-
-#     def _init_(self,
-#         model_fn, lr,
-#         memory, batch_size,
-#         num_atoms, v_min, v_max,
-#         gamma, n,
-#         train_onset, num_update,
-#         device):
-#         self.atoms = torch.linspace(v_min, v_max, steps=num_atoms).to(device)
-
-#     def step(self, q_distr):
-#         """Combines Q-value distributions with a multilayer perceptron.
-
-#         Args:
-#             q_distr = [torch.Tensor<] Q-value distribution from each agent
-#                 They are normalized with shape (agents, num_actions, atoms).
-
-#         Returns [torch.Tensor]:
-#             Combined Q-values of shape (num_actions,).
-#         """
-
-#         q_distr = q_distr.prod(dim=0)
-#         q_distr = q_distr / torch.sum(q_distr, dim=1, keepdim=True)
-#         q_values = torch.sum(self.atoms * q_distr, dim=-1)
-
-#         return q_values
 
 
 class MLPCombiner(QAgent):
@@ -163,26 +146,26 @@ class MLPCombiner(QAgent):
         # set MetaMemory object
         self.meta_memory = memory
 
-    def step(self, q_distribution):
+    def step(self, q_distributions):
         """
         Combine Q-value distributions with a multilayer perceptron.
 
         Args:
-            q_distribution = [torch.Tensor] Q-value distribution from each agent
+            q_distributions = [torch.Tensor] Q-value distribution for each agent
                 They are normalized with shape (agents, num_actions, atoms).
 
         Returns [torch.Tensor]:
             Combined Q-values of shape (num_actions,).
         """
-        # add q_distribution to replay memory
-        self.meta_memory.step(q_distribution)
+        # add q_distributions to replay memory
+        self.meta_memory.step(q_distributions)
 
         # train MLP each step
         self.train()
 
-        # apply Q-Learning MLP to get combined Q-value distributions
+        # apply Q-Learning MLP to get combined Q-value distribution
         with torch.no_grad():
-            q_distribution = F.softmax(self.policy_net(q_distribution), dim=-1)
+            q_distribution = F.softmax(self.policy_net(q_distributions), dim=-1)
 
         # compute the expected Q-value for each action
         q_values = torch.sum(self.atoms * q_distribution, dim=-1)

@@ -101,11 +101,12 @@ class QAgentBase:
         """
         # get predicted Q distributions of actions performed in oldest states
         q_pred = self.policy_net(old_states)[self.q_indices + (actions,)]
+        q_pred = F.log_softmax(q_pred, dim=-1)
 
         with torch.no_grad():
             # get actions performed in newest states from policy network
-            q_distr = F.softmax(self.policy_net(new_states), dim=-1)
-            q_values = torch.sum(self.atoms * q_distr, dim=-1)
+            q_distributions = F.softmax(self.policy_net(new_states), dim=-1)
+            q_values = torch.sum(self.atoms * q_distributions, dim=-1)
             actions = q_values.argmax(dim=-1)
 
             # get target Q distributions of actions performed in newest states
@@ -225,12 +226,12 @@ class QAgent(QAgentBase):
         # set Q-value index arrays beforehand for faster indexing
         self.q_indices = (torch.arange(self.batch_size),)
 
-    def step(self, state, epsilon):
+    def step(self, state):
         """
         Select an action for the current state, using the policy network.
 
         Args:
-            state = [list] current state of the environment
+            state   = [list] current state of the environment
 
         Returns [int]:
             Selected action encoded as number in the range [0, num_actions).
@@ -238,15 +239,13 @@ class QAgent(QAgentBase):
         # apply Q-learning neural network to get Q-value distributions
         with torch.no_grad():
             state = torch.tensor(state)
-            q_distr = F.softmax(self.policy_net(state), dim=-1)
+            q_distributions = F.softmax(self.policy_net(state), dim=-1)
 
         # compute the expected Q-value for each action
-        q_values = torch.sum(self.atoms * q_distr, dim=-1)
+        q_values = torch.sum(self.atoms * q_distributions, dim=-1)
 
         # choose an action by greedily picking from Q table
         action = q_values.argmax()
-        if np.random.rand() < epsilon:
-            return np.random.randint(5, dtype=np.int64)
 
         return int(action)
 
@@ -328,7 +327,7 @@ class EnsembleQAgent(QAgentBase):
         # set combiner attribute
         self.combiner = combiner
 
-    def step(self, state, epsilon):
+    def step(self, state):
         """
         Select an action for the current state, using the policy network.
 
@@ -342,16 +341,14 @@ class EnsembleQAgent(QAgentBase):
             Selected action encoded as number in the range [0, num_actions).
         """
         # apply Q-learning neural network to get Q-value distributions
-
         with torch.no_grad():
             state = torch.tensor(state)
-            q_distribution = F.softmax(self.policy_net(state), dim=-1)
+            q_distributions = F.softmax(self.policy_net(state), dim=-1)
 
         # combine Q-value distributions to one Q-value for each action
-        q_values = self.combiner.step(q_distribution)
+        q_values = self.combiner.step(q_distributions)
 
         # choose an action by greedily picking from Q table
         action = q_values.argmax()
-        if np.random.rand() < epsilon:
-            return np.random.randint(5, dtype=np.int64)
+
         return int(action)
